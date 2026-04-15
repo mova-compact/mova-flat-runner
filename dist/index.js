@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 import { movaPost, movaGet, movaPut, movaDelete, movaRunSteps, shortId, } from "./client.js";
 // ── Config from env ───────────────────────────────────────────────────────────
 function cfg() {
@@ -855,8 +855,522 @@ async function executeTool(name, args) {
     }
 }
 // ── MCP Server ────────────────────────────────────────────────────────────────
-const server = new Server({ name: "mova-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+// ── Prompts (skills) ─────────────────────────────────────────────────────────
+const PROMPTS = [
+    {
+        name: "mova-invoice",
+        description: "Process any invoice, receipt, or bill — OCR extraction, risk validation, and human AP approval gate with signed audit trail.",
+        arguments: [{ name: "file_url", description: "Direct HTTPS URL to the document image (PDF, JPEG, PNG)", required: false }],
+    },
+    {
+        name: "mova-aml",
+        description: "Triage an AML transaction monitoring alert — sanctions screening, PEP check, typology matching, and human compliance decision gate.",
+        arguments: [{ name: "alert_id", description: "Alert ID to triage, e.g. ALERT-1002", required: false }],
+    },
+    {
+        name: "mova-po",
+        description: "Review a purchase order — budget check, vendor risk analysis, authority validation, and human procurement approval gate.",
+        arguments: [{ name: "po_id", description: "Purchase order number, e.g. PO-2026-001", required: false }],
+    },
+    {
+        name: "mova-trade",
+        description: "Review a crypto trade order — sanctions screening, portfolio risk, and human decision gate. Mandatory escalation for ≥$10k or leverage >3x.",
+        arguments: [{ name: "trade_id", description: "Trade order ID, e.g. TRD-2026-0001", required: false }],
+    },
+    {
+        name: "mova-complaint",
+        description: "Handle an EU customer complaint — AI classification, sentiment analysis, and human decision gate (EU complaints handling compliant).",
+        arguments: [{ name: "complaint_id", description: "Complaint ID, e.g. CMP-2026-1001", required: false }],
+    },
+    {
+        name: "mova-compliance",
+        description: "Audit a document against GDPR, PCI-DSS, ISO 27001, or SOC 2 — AI gap analysis and human sign-off gate.",
+        arguments: [
+            { name: "document_url", description: "HTTPS URL to the document", required: false },
+            { name: "framework", description: "gdpr | pci_dss | iso_27001 | soc2", required: false },
+        ],
+    },
+    {
+        name: "mova-credit",
+        description: "Score a credit application — debt-to-income analysis, bureau score evaluation, and human credit officer approval gate.",
+        arguments: [{ name: "applicant_id", description: "Applicant ID, e.g. APP-2026-0042", required: false }],
+    },
+    {
+        name: "mova-supply-chain",
+        description: "Screen a supplier list — sanctions, PEP, ESG, and financial stability checks with human procurement approval gate.",
+        arguments: [],
+    },
+    {
+        name: "mova-churn",
+        description: "Predict customer churn risk for a segment and route the retention campaign decision through a human approval gate.",
+        arguments: [{ name: "segment_id", description: "Customer segment ID to analyze", required: false }],
+    },
+    {
+        name: "mova-contract-gen",
+        description: "Generate a legal document (NDA, SLA, service agreement, supply contract) with section-by-section human review gates.",
+        arguments: [{ name: "doc_type", description: "nda | service_agreement | supply_contract | sla", required: false }],
+    },
+    {
+        name: "mova-connectors",
+        description: "Browse and register MOVA connectors — replace sandbox mocks with your real ERP, AML, CRM, or OCR systems.",
+        arguments: [{ name: "keyword", description: "Filter keyword, e.g. erp, aml, ocr", required: false }],
+    },
+    {
+        name: "mova-discover",
+        description: "Browse the public MOVA contract marketplace — find and run contracts published by other organizations.",
+        arguments: [{ name: "keyword", description: "Search keyword", required: false }],
+    },
+    {
+        name: "mova-register-contract",
+        description: "Register your own MOVA contract — host it at any HTTPS URL and execute it through MOVA with a full audit trail.",
+        arguments: [{ name: "source_url", description: "HTTPS URL to the contract JSON", required: false }],
+    },
+];
+function getPromptContent(name, args) {
+    switch (name) {
+        case "mova-invoice":
+            return `You are running the MOVA Invoice OCR & AP Approval workflow.
+
+${args.file_url ? `Invoice URL: ${args.file_url}` : "Ask the user for a direct HTTPS URL to the invoice image (PDF, JPEG, or PNG) if not already provided."}
+
+## Workflow
+
+**Step 1 — Submit**
+Call \`mova_hitl_start\` with \`file_url\`. If the user hasn't provided a URL, ask once.
+Confirm before starting: "Submit this document to MOVA for OCR and approval?"
+
+**Step 2 — Show analysis**
+If \`status = "waiting_human"\`, display:
+- Vendor name, IBAN, Tax ID, total amount, currency, dates
+- Risk score (0.0–1.0) and risk band
+- Anomaly flags: iban_change / unknown_vendor / duplicate / vat_mismatch
+- Findings with severity
+- Recommended action (marked ← RECOMMENDED)
+
+Ask the user to choose:
+- **approve** — process payment
+- **reject** — notify vendor
+- **escalate_accountant** — forward to accountant
+- **request_info** — ask vendor for clarification
+
+**Step 3 — Submit decision**
+Call \`mova_hitl_decide\` with \`contract_id\` (from Step 1 response, NOT the invoice number), \`option\`, and \`reason\`.
+
+**Step 4 — Show audit**
+Call \`mova_hitl_audit\` then \`mova_hitl_audit_compact\` with \`contract_id\`.
+Display audit receipt ID and the signed event chain.
+
+## Rules
+- NEVER invent or simulate results
+- CONTRACT_ID comes from the mova_hitl_start response, not from the invoice number
+- If a tool call fails, show the exact error`;
+        case "mova-aml":
+            return `You are running the MOVA AML L1 Triage workflow.
+
+${args.alert_id ? `Alert ID: ${args.alert_id}` : "Ask the user for the alert details if not already provided."}
+
+## Workflow
+
+**Step 1 — Collect alert data**
+Use \`mova_calibrate_intent\` with \`contract_type: "aml"\` and empty answers array to get the first required field. Call it iteratively until status = VALID.
+
+Required fields: alert_id, rule_id, rule_description, risk_score (0–100), customer_id, customer_name, customer_risk_rating (low/medium/high), customer_type (individual/business), customer_jurisdiction (ISO alpha-2), triggered_transactions (JSON array of {transaction_id, amount_eur}), pep_status (boolean), sanctions_match (boolean).
+
+**Step 2 — Submit for triage**
+Call \`mova_hitl_start_aml\` with all collected fields.
+
+**Step 3 — Show analysis**
+If \`status = "waiting_human"\`, display:
+- Risk score assessment and triage recommendation
+- Sanctions check (OFAC/EU/UN) and PEP status
+- Typology match (structuring, layering, smurfing, etc.)
+- Customer risk: rating, jurisdiction risk, burst intensity
+- Anomaly flags and findings
+
+**Mandatory escalation rules (enforced by policy, cannot be bypassed):**
+- risk_score > 85 → mandatory human escalation
+- sanctions hit → immediate escalation
+- PEP flag → mandatory L2 escalation
+
+Ask to choose (mark ← RECOMMENDED if present):
+- **clear** — false positive
+- **escalate_l2** — escalate to L2 analyst
+- **immediate_escalate** — freeze account
+
+**Step 4 — Submit decision**
+Call \`mova_hitl_decide\` with \`contract_id\` (from Step 2 response), \`option\`, and \`reason\` (analyst reasoning).
+
+**Step 5 — Audit**
+Call \`mova_hitl_audit\` and \`mova_hitl_audit_compact\` with \`contract_id\`.
+
+## Rules
+- NEVER invent results
+- CONTRACT_ID comes from mova_hitl_start_aml, not from the alert ID`;
+        case "mova-po":
+            return `You are running the MOVA Purchase Order Approval workflow.
+
+${args.po_id ? `PO number: ${args.po_id}` : "Ask the user for the PO number and approver employee ID."}
+
+## Workflow
+
+**Step 1 — Submit PO**
+Call \`mova_hitl_start_po\` with \`po_id\` and \`approver_employee_id\`.
+Confirm before starting: "Submit PO [po_id] to MOVA for risk analysis and approval?"
+
+**Step 2 — Show analysis**
+If \`status = "waiting_human"\`, display:
+- Budget check: within_budget, utilization %, budget remaining
+- Vendor status: registered / pending / blacklisted
+- Authority check: adequate, reason
+- Risk score and anomaly flags
+- Recommended action (marked ← RECOMMENDED)
+
+Ask to choose:
+- **approve** — approve PO
+- **hold** — hold for review
+- **reject** — reject PO
+- **escalate** — escalate to director/board
+
+**Step 3 — Submit decision**
+Call \`mova_hitl_decide\` with \`contract_id\`, \`option\`, and \`reason\`.
+
+**Step 4 — Audit**
+Call \`mova_hitl_audit\` and \`mova_hitl_audit_compact\` with \`contract_id\`.
+
+## Rules
+- CONTRACT_ID comes from mova_hitl_start_po, not from the PO number
+- NEVER invent results`;
+        case "mova-trade":
+            return `You are running the MOVA Crypto Trade Review workflow.
+
+${args.trade_id ? `Trade ID: ${args.trade_id}` : "Ask the user for the trade order details."}
+
+## Workflow
+
+**Step 1 — Collect trade data**
+Required: trade_id, wallet_address, chain (ethereum/bitcoin/solana), token_pair (e.g. BTC/USDT), side (buy/sell), order_type (market/limit/stop), order_size_usd, leverage (1 = no leverage).
+
+**Step 2 — Submit**
+Call \`mova_hitl_start_trade\` with all fields.
+Confirm: "Submit trade [trade_id] for sanctions screening and risk review?"
+
+**Step 3 — Show analysis**
+If \`status = "waiting_human"\`, display:
+- Risk level: low/medium/high/critical
+- Market check: price, volatility, 24h change
+- Portfolio risk: concentration %, VaR 1d
+- Sanctions check result
+- Rejection reasons if any
+
+**Policy rules (enforced, cannot be bypassed):**
+- sanctions hit OR leverage > 10x → IMMEDIATE REJECT
+- order_size_usd ≥ $10,000 OR leverage > 3x → MANDATORY ESCALATE
+
+Ask to choose:
+- **approve** — approve trade
+- **reject** — reject trade
+- **escalate_human** — escalate to human trader
+
+**Step 4 — Submit decision & audit**
+Call \`mova_hitl_decide\`, then \`mova_hitl_audit\` and \`mova_hitl_audit_compact\`.
+
+## Rules
+- CONTRACT_ID comes from mova_hitl_start_trade, not from the trade ID
+- NEVER bypass mandatory escalation rules`;
+        case "mova-complaint":
+            return `You are running the MOVA EU Complaints Handling workflow.
+
+${args.complaint_id ? `Complaint ID: ${args.complaint_id}` : "Ask the user for the complaint details."}
+
+## Workflow
+
+**Step 1 — Collect complaint data**
+Required: complaint_id, customer_id, complaint_text (full text), channel (web/email/phone/chat/branch), product_category (payments/mortgage/insurance/etc.), complaint_date (ISO).
+Optional: previous_complaints (array), customer_segment, preferred_language.
+
+**Step 2 — Submit**
+Call \`mova_hitl_start_complaint\` with all fields.
+
+**Step 3 — Show analysis**
+If \`status = "waiting_human"\`, display:
+- Triage decision: routine / manual_review / blocked
+- Product risk level
+- Sentiment flags: compensation_claim, regulator_threat, fraud_signal, urgent
+- Draft response hint
+- Recommended action
+
+**Mandatory human review (enforced by policy):**
+- Compensation claim OR regulator threat OR fraud signal OR repeat customer OR product_risk=high
+
+Ask to choose:
+- **resolve** — send standard response
+- **escalate** — escalate to complaints officer
+- **reject** — incomplete or invalid
+- **regulator_flag** — flag for regulator reporting
+
+**Step 4 — Submit decision & audit**
+Call \`mova_hitl_decide\`, then \`mova_hitl_audit\` and \`mova_hitl_audit_compact\`.
+
+## Rules
+- CONTRACT_ID from mova_hitl_start_complaint, not complaint ID
+- NEVER invent results`;
+        case "mova-compliance":
+            return `You are running the MOVA Compliance Audit workflow.
+
+${args.document_url ? `Document: ${args.document_url}` : ""}${args.framework ? `\nFramework: ${args.framework}` : ""}
+${!args.document_url ? "Ask the user for the document URL and compliance framework if not provided." : ""}
+
+## Workflow
+
+**Step 1 — Submit document**
+Required: document_url (HTTPS URL), framework (gdpr/pci_dss/iso_27001/soc2), org_name.
+Optional: document_id (auto-generated if omitted).
+
+Call \`mova_hitl_start_compliance\` with these fields.
+Confirm: "Submit [document] for [framework] compliance audit?"
+
+**Step 2 — Show findings**
+If \`status = "waiting_human"\`, display:
+- Pass count / total checks
+- Critical findings count
+- Findings list: code, severity, summary, recommendation
+- Risk score
+- Recommended action
+
+Ask to choose:
+- **approve** — document is compliant
+- **approve_with_conditions** — list remediation items in reason
+- **reject** — document fails compliance
+- **request_corrections** — return for corrections
+
+**Step 3 — Submit decision & audit**
+Call \`mova_hitl_decide\`, then \`mova_hitl_audit\` and \`mova_hitl_audit_compact\`.
+
+## Rules
+- CONTRACT_ID from mova_hitl_start_compliance, not document ID
+- Provide reason text when choosing approve_with_conditions or request_corrections`;
+        case "mova-credit":
+            return `You are running the MOVA Credit Scoring workflow.
+
+${args.applicant_id ? `Applicant ID: ${args.applicant_id}` : "Ask the user for applicant financial data."}
+
+## Workflow
+
+**Step 1 — Collect applicant data**
+Required: applicant_id, monthly_income, total_debt, credit_history_months, bureau_score, requested_amount, loan_purpose (home/auto/business/personal).
+
+**Step 2 — Submit**
+Call \`mova_hitl_start_credit\` with all fields.
+Confirm: "Submit application [applicant_id] for credit risk scoring?"
+
+**Step 3 — Show scoring results**
+If \`status = "waiting_human"\`, display:
+- Score (0–1000) and risk band: excellent/good/fair/poor/very_poor
+- Recommended credit limit
+- Debt-to-income ratio
+- Key factors (positive/negative, weighted)
+- Recommended action
+
+All credit decisions require human approval (enforced by policy).
+
+Ask to choose:
+- **approve** — approve at recommended limit
+- **approve_reduced** — approve at reduced limit (specify amount in reason)
+- **reject** — reject application
+- **request_info** — request additional documents
+
+**Step 4 — Submit decision & audit**
+Call \`mova_hitl_decide\`, then \`mova_hitl_audit\` and \`mova_hitl_audit_compact\`.`;
+        case "mova-supply-chain":
+            return `You are running the MOVA Supply Chain Risk Screening workflow.
+
+## Workflow
+
+**Step 1 — Collect supplier data**
+Required:
+- suppliers: JSON array of {id, name, country (ISO alpha-2)}
+- category: raw_materials / logistics / technology / services
+- requestor_id: employee ID
+
+**Step 2 — Submit**
+Call \`mova_hitl_start_supply_chain\`.
+Confirm: "Screen [N] suppliers for sanctions, PEP, and ESG risk?"
+
+**Step 3 — Show results**
+If \`status = "waiting_human"\`, display:
+- Summary: total / critical / high / clean counts
+- Per-supplier: risk band, sanctions match, PEP match, ESG rating, financial stability
+- Recommended action
+
+Ask to choose:
+- **approve_all** — approve all suppliers
+- **approve_clean** — approve clean only, block high-risk
+- **reject_all** — block entire batch
+- **escalate** — escalate to compliance team
+
+**Step 4 — Submit decision & audit**
+Call \`mova_hitl_decide\`, then \`mova_hitl_audit\` and \`mova_hitl_audit_compact\`.`;
+        case "mova-churn":
+            return `You are running the MOVA Churn Prediction & Retention workflow.
+
+${args.segment_id ? `Segment: ${args.segment_id}` : "Ask the user for the segment ID and analysis parameters."}
+
+## Workflow
+
+**Step 1 — Collect parameters**
+Required: segment_id, period_days (activity history window), threshold (churn probability to flag, 0.0–1.0), requestor_id.
+
+**Step 2 — Submit**
+Call \`mova_hitl_start_churn\`.
+Confirm: "Run churn prediction for segment [segment_id] over [period_days] days?"
+
+**Step 3 — Show analysis**
+If \`status = "waiting_human"\`, display:
+- Total analyzed / at-risk count / avg churn score
+- Top at-risk customers: customer_id, churn_score, top_factor, recommended_action
+- Key churn signals with importance weights
+- Recommended retention action
+
+Ask to choose:
+- **launch_campaign** — retention campaign for all high-risk customers
+- **launch_selective** — top-N only (specify N in reason)
+- **defer** — defer to next review cycle
+- **escalate** — escalate to VP of Customer Success
+
+**Step 4 — Submit decision & audit**
+Call \`mova_hitl_decide\`, then \`mova_hitl_audit\` and \`mova_hitl_audit_compact\`.`;
+        case "mova-contract-gen":
+            return `You are running the MOVA Legal Document Generation workflow.
+
+${args.doc_type ? `Document type: ${args.doc_type}` : "Ask the user what type of legal document to generate."}
+
+## Workflow
+
+**Step 1 — Collect parameters**
+Required: doc_type (nda/service_agreement/supply_contract/sla), party_a (full name), party_b (full name), jurisdiction (DE/US-NY/EU/etc.), effective_date (ISO).
+Optional: terms (key-value object with additional clauses), template_id.
+
+**Step 2 — Submit**
+Call \`mova_hitl_start_contract_gen\`.
+Confirm: "Generate [doc_type] between [party_a] and [party_b] under [jurisdiction] law?"
+
+**Step 3 — Section-by-section review**
+If \`status = "waiting_human"\`, display each section with title and content.
+Ask for each section:
+- **approve_section** — approve as written
+- **edit_section** — accept with edits (provide edited text in reason)
+- **reject_section** — reject, request redraft
+- **escalate** — escalate to senior legal counsel
+
+**Step 4 — Submit decision & audit**
+Call \`mova_hitl_decide\`, then \`mova_hitl_audit\` and \`mova_hitl_audit_compact\`.
+
+## Note
+Generated documents are drafts only. Always have final documents reviewed by qualified legal counsel.`;
+        case "mova-connectors":
+            return `You are helping the user browse and configure MOVA connectors.
+
+${args.keyword ? `Searching for: ${args.keyword}` : ""}
+
+## What are connectors?
+
+Connectors replace MOVA sandbox mocks with your real business systems. After registration, all contracts in your org route calls to your endpoints instead of test data.
+
+## Workflow
+
+**Browse connectors**
+Call \`mova_list_connectors\`${args.keyword ? ` with keyword: "${args.keyword}"` : " (optionally with a keyword to filter)"}. Show the result as a table: connector_id | display_name | description.
+
+**Register a connector**
+Call \`mova_register_connector\` with:
+- connector_id (from the list)
+- endpoint (your HTTPS URL)
+- label (optional friendly name)
+- auth_header + auth_value (optional, e.g. X-Api-Key)
+
+**List registered overrides**
+Call \`mova_list_connector_overrides\` to see all active overrides for your org.
+
+**Remove an override**
+Call \`mova_delete_connector_override\` with the connector_id to revert to sandbox mock.
+
+## Key connector categories
+
+| Category | Connector IDs |
+|---|---|
+| OCR & document | connector.ocr.document_extract_v1, connector.ocr.vision_llm_v1 |
+| AML & screening | connector.screening.pep_sanctions_v1, connector.aml.transaction_history_v1 |
+| ERP & finance | connector.erp.po_lookup_v1, connector.erp.invoice_post_v1, connector.finance.duplicate_check_v1 |
+| Risk & credit | connector.risk.jurisdiction_v1, connector.credit.bureau_v1 |
+| Tax | connector.tax.vat_validate_v1 |
+
+## Rules
+- NEVER invent connector IDs — always fetch the list first
+- Endpoints must be HTTPS`;
+        case "mova-discover":
+            return `You are helping the user discover and run public MOVA contracts.
+
+${args.keyword ? `Searching for: ${args.keyword}` : ""}
+
+## Workflow
+
+**Step 1 — Browse marketplace**
+Call \`mova_discover_contracts\`${args.keyword ? ` with keyword: "${args.keyword}"` : " (optionally with keyword or execution_mode filter)"}.
+Execution modes: deterministic / bounded_variance / ai_assisted / human_gated.
+Show results as a table: title | version | execution_mode | description | contract_id.
+
+**Step 2 — Run a contract**
+Call \`mova_run_contract\` with \`contract_id\` and any required \`inputs\`.
+To check run status: call \`mova_run_status\` with the returned \`run_id\`.
+
+**Step 3 — Audit**
+Call \`mova_hitl_audit\` with the contract_id to retrieve the signed audit receipt.`;
+        case "mova-register-contract":
+            return `You are helping the user register their own MOVA contract.
+
+${args.source_url ? `Contract URL: ${args.source_url}` : ""}
+
+## Workflow
+
+**Step 1 — Prepare**
+The contract JSON must be hosted at a public HTTPS URL (GitHub, S3, or any CDN).
+MOVA stores only the manifest — your contract JSON stays at your URL.
+
+**Step 2 — Register**
+Call \`mova_register_contract\` with:
+- source_url: HTTPS URL to your contract JSON
+- title: human-readable name
+- version: semantic version (e.g. 1.0.0)
+- execution_mode: deterministic / bounded_variance / ai_assisted / human_gated
+- description: what the contract does (optional)
+- required_connectors: array of connector IDs this contract needs (optional)
+- visibility: private (default) or public
+
+**Step 3 — Manage**
+- List your contracts: \`mova_list_my_contracts\`
+- Change visibility: \`mova_set_contract_visibility\`
+- Run it: \`mova_run_contract\` with the returned contract_id
+- Delete registration: \`mova_delete_contract\` (does not affect your source file)
+
+## To make public
+Set visibility to "public" — your contract appears in the marketplace for others to discover and run.`;
+        default:
+            return `Unknown prompt: ${name}`;
+    }
+}
+// ── MCP Server ────────────────────────────────────────────────────────────────
+const server = new Server({ name: "mova-mcp", version: "1.0.0" }, { capabilities: { tools: {}, prompts: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: PROMPTS }));
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    const a = (args ?? {});
+    const content = getPromptContent(name, a);
+    return {
+        description: PROMPTS.find(p => p.name === name)?.description ?? name,
+        messages: [{ role: "user", content: { type: "text", text: content } }],
+    };
+});
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     try {
