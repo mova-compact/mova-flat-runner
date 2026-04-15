@@ -1,0 +1,42 @@
+{
+  "name": "mova-mcp",
+  "version": "1.0.0",
+  "description": "MOVA HITL contract execution — MCP server for Claude Desktop, Claude Code, Cursor, and any MCP-compatible client",
+  "type": "module",
+  "license": "MIT-0",
+  "keywords": [
+    "mcp",
+    "mova",
+    "hitl",
+    "aml",
+    "compliance",
+    "invoice",
+    "ocr",
+    "anthropic",
+    "claude"
+  ],
+  "homepage": "https://github.com/mova-compact/mova-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mova-compact/mova-mcp.git"
+  },
+  "bin": {
+    "mova-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"const fs=require('fs');const p='dist/index.js';let c=fs.readFileSync(p,'utf8');if(!c.startsWith('#!/usr/bin/env node'))fs.writeFileSync(p,'#!/usr/bin/env node\\n'+c);fs.chmodSync(p,0o755);\"",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^5.4.0"
+  }
+}
