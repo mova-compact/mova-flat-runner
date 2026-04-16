@@ -25,10 +25,11 @@ export const movaPost = (c, path, body) => movaRequest(c, "POST", path, body);
 export const movaGet = (c, path) => movaRequest(c, "GET", path);
 export const movaPut = (c, path, body) => movaRequest(c, "PUT", path, body);
 export const movaDelete = (c, path) => movaRequest(c, "DELETE", path);
-/** Run analyze → verify → decide steps for a started contract.
+/** Run backend steps (analyze → verify → decide) with local deterministic validators
+ *  executed after the first ai_task output is fetched.
  *  Returns waiting_human (with analysis + options) or completed (with audit). */
-export async function movaRunSteps(cfg, contractId) {
-    let analysis = null;
+export async function movaRunSteps(cfg, contractId, validators) {
+    let analysis = {};
     for (const stepId of ["analyze", "verify", "decide"]) {
         const result = await movaPost(cfg, `/api/v1/contracts/${contractId}/step`, {
             envelope: {
@@ -41,13 +42,27 @@ export async function movaRunSteps(cfg, contractId) {
         });
         if (!result.ok)
             return result;
+        // After analyze: fetch output, then run local validators
         if (stepId === "analyze") {
             try {
                 const output = await movaGet(cfg, `/api/v1/contracts/${contractId}/steps/analyze/output`);
                 if (output.ok !== false)
-                    analysis = output;
+                    analysis = { ...output };
             }
             catch { /* non-fatal */ }
+            // Run deterministic validators locally, merge results into analysis
+            for (const v of validators) {
+                try {
+                    // eslint-disable-next-line no-new-func
+                    const fn = new Function(`return (${v.fn})`)();
+                    const res = fn(analysis);
+                    const val = (res?.value ?? {});
+                    Object.assign(analysis, val);
+                }
+                catch (e) {
+                    analysis[`${v.step_id}_error`] = String(e);
+                }
+            }
         }
         if (result.status === "waiting_human") {
             const dpResp = await movaGet(cfg, `/api/v1/contracts/${contractId}/decision`);
@@ -59,18 +74,12 @@ export async function movaRunSteps(cfg, contractId) {
                 question: dp.question ?? "Select action:",
                 options: dp.options ?? [],
                 recommended: dp.recommended_option_id ?? null,
-                ...(analysis ? { analysis } : {}),
+                analysis,
             };
         }
     }
     const audit = await movaGet(cfg, `/api/v1/contracts/${contractId}/audit`);
-    return {
-        ok: true,
-        status: "completed",
-        contract_id: contractId,
-        audit_receipt: audit.audit_receipt ?? {},
-        ...(analysis ? { analysis } : {}),
-    };
+    return { ok: true, status: "completed", contract_id: contractId, audit_receipt: audit.audit_receipt ?? {}, analysis };
 }
 export function toolResult(data) {
     return {

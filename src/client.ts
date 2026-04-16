@@ -47,10 +47,21 @@ export const movaPut = (c: MovaConfig, path: string, body: unknown) =>
 export const movaDelete = (c: MovaConfig, path: string) =>
   movaRequest(c, "DELETE", path);
 
-/** Run analyze → verify → decide steps for a started contract.
+export interface ValidatorDef {
+  step_id: string;
+  title: string;
+  fn: string;
+}
+
+/** Run backend steps (analyze → verify → decide) with local deterministic validators
+ *  executed after the first ai_task output is fetched.
  *  Returns waiting_human (with analysis + options) or completed (with audit). */
-export async function movaRunSteps(cfg: MovaConfig, contractId: string): Promise<unknown> {
-  let analysis: unknown = null;
+export async function movaRunSteps(
+  cfg: MovaConfig,
+  contractId: string,
+  validators: ValidatorDef[],
+): Promise<unknown> {
+  let analysis: Record<string, unknown> = {};
 
   for (const stepId of ["analyze", "verify", "decide"]) {
     const result = await movaPost(cfg, `/api/v1/contracts/${contractId}/step`, {
@@ -65,15 +76,33 @@ export async function movaRunSteps(cfg: MovaConfig, contractId: string): Promise
 
     if (!result.ok) return result;
 
+    // After analyze: fetch output, then run local validators
     if (stepId === "analyze") {
       try {
-        const output = await movaGet(cfg, `/api/v1/contracts/${contractId}/steps/analyze/output`) as Record<string, unknown>;
-        if (output.ok !== false) analysis = output;
+        const output = await movaGet(
+          cfg, `/api/v1/contracts/${contractId}/steps/analyze/output`,
+        ) as Record<string, unknown>;
+        if (output.ok !== false) analysis = { ...output };
       } catch { /* non-fatal */ }
+
+      // Run deterministic validators locally, merge results into analysis
+      for (const v of validators) {
+        try {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function(`return (${v.fn})`)() as (i: unknown) => Record<string, unknown>;
+          const res = fn(analysis);
+          const val = (res?.value ?? {}) as Record<string, unknown>;
+          Object.assign(analysis, val);
+        } catch (e) {
+          analysis[`${v.step_id}_error`] = String(e);
+        }
+      }
     }
 
     if (result.status === "waiting_human") {
-      const dpResp = await movaGet(cfg, `/api/v1/contracts/${contractId}/decision`) as Record<string, unknown>;
+      const dpResp = await movaGet(
+        cfg, `/api/v1/contracts/${contractId}/decision`,
+      ) as Record<string, unknown>;
       const dp = (dpResp.decision_point ?? {}) as Record<string, unknown>;
       return {
         ok: true,
@@ -82,19 +111,15 @@ export async function movaRunSteps(cfg: MovaConfig, contractId: string): Promise
         question: dp.question ?? "Select action:",
         options: dp.options ?? [],
         recommended: dp.recommended_option_id ?? null,
-        ...(analysis ? { analysis } : {}),
+        analysis,
       };
     }
   }
 
-  const audit = await movaGet(cfg, `/api/v1/contracts/${contractId}/audit`) as Record<string, unknown>;
-  return {
-    ok: true,
-    status: "completed",
-    contract_id: contractId,
-    audit_receipt: audit.audit_receipt ?? {},
-    ...(analysis ? { analysis } : {}),
-  };
+  const audit = await movaGet(
+    cfg, `/api/v1/contracts/${contractId}/audit`,
+  ) as Record<string, unknown>;
+  return { ok: true, status: "completed", contract_id: contractId, audit_receipt: audit.audit_receipt ?? {}, analysis };
 }
 
 export function toolResult(data: unknown) {

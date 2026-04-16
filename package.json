@@ -1,7 +1,7 @@
 {
   "name": "mova-mcp",
-  "version": "1.0.0",
-  "description": "MOVA HITL contract execution — MCP server for Claude Desktop, Claude Code, Cursor, and any MCP-compatible client",
+  "version": "2.0.1",
+  "description": "MOVA contract execution runtime — structured ENV/DS contract mode, MCP Resources, 6 generic tools",
   "type": "module",
   "license": "MIT-0",
   "keywords": [
@@ -18,10 +18,10 @@
   "homepage": "https://github.com/mova-compact/mova-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mova-compact/mova-mcp.git"
+    "url": "git+https://github.com/mova-compact/mova-mcp.git"
   },
   "bin": {
-    "mova-mcp": "./dist/index.js"
+    "mova-mcp": "dist/index.js"
   },
   "files": [
     "dist",
