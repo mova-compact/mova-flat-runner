@@ -116,6 +116,52 @@ Same pattern as Claude Desktop — `npx -y mova-mcp` with the three env vars.
 
 ---
 
+## Connectors — replace the sandbox mock with your real system
+
+By default every contract uses a sandbox mock. To wire in your real OCR service, ERP, or VAT API, register a connector override. Claude does not create connectors automatically — you register them once and they apply to all subsequent runs.
+
+Ask Claude:
+
+> *"Register my OCR endpoint for MOVA"* — then provide the URL and auth details when asked.
+
+Or register directly:
+
+```
+connector_id : connector.ocr.document_extract_v1
+endpoint     : https://ocr.yourcompany.com/extract
+auth_header  : X-Api-Key
+auth_value   : your-secret-key
+```
+
+Available connector IDs:
+
+| ID | Replaces |
+|---|---|
+| `connector.ocr.document_extract_v1` | Document OCR extraction |
+| `connector.ocr.vision_llm_v1` | Vision LLM OCR |
+| `connector.finance.duplicate_check_v1` | Duplicate invoice detection |
+| `connector.tax.vat_validate_v1` | VAT number validation (VIES) |
+| `connector.erp.invoice_post_v1` | ERP invoice posting |
+
+---
+
+## Audit journal
+
+Every contract execution produces an immutable event log stored in MOVA R2. Each line is a signed JSON event recording exactly what happened, when, and who decided.
+
+```jsonl
+{"event":"contract_started","contract_id":"cnt_3f8a1b","contract_type":"invoice_approval","at":"2026-04-16T14:22:58Z"}
+{"event":"step_completed","step":"analyze","duration_ms":1820,"at":"2026-04-16T14:23:00Z"}
+{"event":"step_completed","step":"verify","findings":["iban_change_detected","ocr_confidence_low"],"at":"2026-04-16T14:23:03Z"}
+{"event":"decision_point","question":"How do you want to proceed?","options":["approve","reject","escalate_accountant"],"recommended":"escalate_accountant","at":"2026-04-16T14:23:05Z"}
+{"event":"human_decision","option":"escalate_accountant","reason":"IBAN changed — routing to accountant for manual check","actor":"user","at":"2026-04-16T14:23:41Z"}
+{"event":"contract_completed","verdict":"partially_fulfilled","receipt_id":"rec_9c2d4e","signature":"sha256:a3f1c8...","at":"2026-04-16T14:23:41Z"}
+```
+
+Retrieve it with `mova_hitl_audit` (signed receipt) or `mova_hitl_audit_compact` (full event chain).
+
+---
+
 ## Data flow
 
 - Contract inputs → `api.mova-lab.eu` (Cloudflare Worker, EU-hosted)
