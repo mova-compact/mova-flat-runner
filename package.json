@@ -1,6 +1,6 @@
 {
   "name": "mova-mcp",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "MOVA contract execution runtime — structured ENV/DS contract mode, MCP Resources, 6 generic tools",
   "type": "module",
   "license": "MIT-0",
@@ -28,9 +28,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && node -e \"const fs=require('fs');const p='dist/index.js';let c=fs.readFileSync(p,'utf8');if(!c.startsWith('#!/usr/bin/env node'))fs.writeFileSync(p,'#!/usr/bin/env node\\n'+c);fs.chmodSync(p,0o755);\"",
-    "dev": "tsc --watch",
-    "start": "node dist/index.js"
+    "build":       "tsc && node -e \"const fs=require('fs');const p='dist/index.js';let c=fs.readFileSync(p,'utf8');if(!c.startsWith('#!/usr/bin/env node'))fs.writeFileSync(p,'#!/usr/bin/env node\\n'+c);fs.chmodSync(p,0o755);\"",
+    "dev":         "tsc --watch",
+    "start":       "node dist/index.js",
+    "test:build":  "tsc -p tsconfig.test.json",
+    "test":        "npm run test:build && node --test dist-test/tests/unit/*.test.js dist-test/tests/negative/*.test.js",
+    "smoke:api":   "npm run test:build && node dist-test/tests/smoke/api.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2"
