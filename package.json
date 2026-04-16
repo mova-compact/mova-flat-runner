@@ -1,6 +1,6 @@
 {
   "name": "mova-mcp",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "MOVA contract execution runtime — structured ENV/DS contract mode, MCP Resources, 6 generic tools",
   "type": "module",
   "license": "MIT-0",

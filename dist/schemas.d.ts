@@ -38,7 +38,7 @@ export interface ContractManifest {
     validators?: Array<{
         step_id: string;
         title: string;
-        fn: string;
+        validator_id: string;
     }>;
 }
 export declare const CONTRACT_MANIFESTS: Record<string, ContractManifest>;

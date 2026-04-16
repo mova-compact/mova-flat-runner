@@ -44,7 +44,7 @@ export interface ContractManifest {
   };
   decision_options: Array<{ option_id: string; label: string }>;
   steps: unknown[];       // sent to platform at runtime; not exposed via Resources
-  validators?: Array<{ step_id: string; title: string; fn: string }>;  // local-only deterministic validators, run after first ai_task
+  validators?: Array<{ step_id: string; title: string; validator_id: string }>;  // local-only deterministic validators, run after first ai_task
 }
 
 // ── Step builders (internal) ──────────────────────────────────────────────────
@@ -105,12 +105,9 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_totals",  title: "Validate Invoice Totals",
-        fn: "(inputs) => { const sub = Math.round((Number(inputs.subtotal) || 0) * 100); const tax = Math.round((Number(inputs.tax_amount) || 0) * 100); const total = Math.round((Number(inputs.total_amount) || 0) * 100); const diff = Math.abs(sub + tax - total); return { ok: true, value: { totals_valid: diff <= 5, expected_total: (sub + tax) / 100, actual_total: total / 100, diff_cents: diff }, step_id: 'validate_totals' }; }" },
-      { step_id: "validate_dates",   title: "Validate Invoice Dates",
-        fn: "(inputs) => { const inv = String(inputs.invoice_date || ''); const due = String(inputs.due_date || ''); const fmt = /^\\d{4}-\\d{2}-\\d{2}$/; const inv_ok = fmt.test(inv); const due_ok = fmt.test(due); const order_ok = !inv_ok || !due_ok || due >= inv; return { ok: true, value: { dates_valid: inv_ok && due_ok && order_ok, invoice_date: inv, due_date: due, format_ok: inv_ok && due_ok, order_ok }, step_id: 'validate_dates' }; }" },
-      { step_id: "validate_amounts", title: "Validate Invoice Amounts",
-        fn: "(inputs) => { const sub = Number(inputs.subtotal); const tax = Number(inputs.tax_amount); const total = Number(inputs.total_amount); return { ok: true, value: { amounts_valid: sub > 0 && tax >= 0 && total > 0, subtotal: sub, tax_amount: tax, total_amount: total }, step_id: 'validate_amounts' }; }" },
+      { step_id: "validate_totals",  title: "Validate Invoice Totals",   validator_id: "invoice.validate_totals_v0"  },
+      { step_id: "validate_dates",   title: "Validate Invoice Dates",    validator_id: "invoice.validate_dates_v0"   },
+      { step_id: "validate_amounts", title: "Validate Invoice Amounts",  validator_id: "invoice.validate_amounts_v0" },
     ],
   },
 
@@ -147,8 +144,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_inputs", title: "Validate PO Inputs",
-        fn: "(inputs) => { const po = String(inputs.po_id || ''); const emp = String(inputs.approver_employee_id || ''); const po_ok = po.length >= 3; const emp_ok = emp.length >= 3; return { ok: true, value: { inputs_valid: po_ok && emp_ok, po_id_present: po_ok, approver_present: emp_ok }, step_id: 'validate_inputs' }; }" },
+      { step_id: "validate_inputs", title: "Validate PO Inputs", validator_id: "po.validate_inputs_v0" },
     ],
   },
 
@@ -189,8 +185,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_limits", title: "Validate Trade Limits",
-        fn: "(inputs) => { const lev = Number(inputs.leverage) || 0; const size = Number(inputs.order_size_usd) || 0; const lev_ok = lev >= 1 && lev <= 100; const size_ok = size > 0; const hard_reject = lev > 10; const mandatory_escalate = size >= 10000 || lev > 3; return { ok: true, value: { limits_valid: lev_ok && size_ok, leverage: lev, order_size_usd: size, hard_reject, hard_reject_reason: hard_reject ? 'leverage_exceeds_10x' : null, mandatory_escalate }, step_id: 'validate_limits' }; }" },
+      { step_id: "validate_limits", title: "Validate Trade Limits", validator_id: "trade.validate_limits_v0" },
     ],
   },
 
@@ -236,8 +231,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_policy_flags", title: "Validate AML Policy Flags",
-        fn: "(inputs) => { const sanctions = Boolean(inputs.sanctions_match); const pep = Boolean(inputs.pep_status); const score = Number(inputs.risk_score) || 0; const score_ok = score >= 0 && score <= 100; const mandatory_escalate = sanctions || pep || score > 85; const auto_clear = score <= 30 && !sanctions && !pep && (!inputs.historical_alerts || inputs.historical_alerts.length === 0); return { ok: true, value: { policy_flags_valid: score_ok, sanctions_match: sanctions, pep_status: pep, risk_score: score, mandatory_escalate, auto_clear_eligible: auto_clear }, step_id: 'validate_policy_flags' }; }" },
+      { step_id: "validate_policy_flags", title: "Validate AML Policy Flags", validator_id: "aml.validate_policy_flags_v0" },
     ],
   },
 
@@ -281,8 +275,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_inputs", title: "Validate Complaint Inputs",
-        fn: "(inputs) => { const text = String(inputs.complaint_text || ''); const date = String(inputs.complaint_date || ''); const text_ok = text.trim().length >= 10; const date_ok = /^\\d{4}-\\d{2}-\\d{2}$/.test(date); return { ok: true, value: { inputs_valid: text_ok && date_ok, text_length: text.trim().length, text_ok, date_ok, complaint_date: date }, step_id: 'validate_inputs' }; }" },
+      { step_id: "validate_inputs", title: "Validate Complaint Inputs", validator_id: "complaint.validate_inputs_v0" },
     ],
   },
 
@@ -321,8 +314,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_inputs", title: "Validate Compliance Inputs",
-        fn: "(inputs) => { const url = String(inputs.document_url || ''); const fw = String(inputs.framework || ''); const url_ok = url.startsWith('https://'); const valid_frameworks = ['gdpr', 'pci_dss', 'iso_27001', 'soc2']; const fw_ok = valid_frameworks.includes(fw); const org_ok = String(inputs.org_name || '').trim().length >= 2; return { ok: true, value: { inputs_valid: url_ok && fw_ok && org_ok, url_ok, framework_ok: fw_ok, org_ok, document_url: url, framework: fw }, step_id: 'validate_inputs' }; }" },
+      { step_id: "validate_inputs", title: "Validate Compliance Inputs", validator_id: "compliance.validate_inputs_v0" },
     ],
   },
 
@@ -364,8 +356,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_calcs", title: "Validate Credit Calculations",
-        fn: "(inputs) => { const income = Number(inputs.monthly_income) || 0; const debt = Number(inputs.total_debt) || 0; const bureau = Number(inputs.bureau_score) || 0; const requested = Number(inputs.requested_amount) || 0; const income_ok = income > 0; const bureau_ok = bureau >= 300 && bureau <= 850; const requested_ok = requested > 0; const dti = income_ok ? debt / (income * 12) : null; const hard_reject = bureau < 500 || (dti !== null && dti > 0.6); return { ok: true, value: { calcs_valid: income_ok && bureau_ok && requested_ok, monthly_income: income, total_debt: debt, bureau_score: bureau, requested_amount: requested, debt_to_income_ratio: dti, hard_reject, hard_reject_reason: hard_reject ? (bureau < 500 ? 'bureau_score_below_500' : 'dti_exceeds_60pct') : null }, step_id: 'validate_calcs' }; }" },
+      { step_id: "validate_calcs", title: "Validate Credit Calculations", validator_id: "credit.validate_calcs_v0" },
     ],
   },
 
@@ -403,8 +394,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_inputs", title: "Validate Supply Chain Inputs",
-        fn: "(inputs) => { const suppliers = Array.isArray(inputs.suppliers) ? inputs.suppliers : []; const non_empty = suppliers.length > 0; const valid_items = suppliers.filter(s => s && typeof s === 'object' && String(s.id || '').length > 0 && String(s.name || '').length > 0 && /^[A-Z]{2}$/.test(String(s.country || ''))); const all_valid = non_empty && valid_items.length === suppliers.length; const invalid_count = suppliers.length - valid_items.length; return { ok: true, value: { inputs_valid: all_valid, supplier_count: suppliers.length, valid_supplier_count: valid_items.length, invalid_supplier_count: invalid_count, has_suppliers: non_empty }, step_id: 'validate_inputs' }; }" },
+      { step_id: "validate_inputs", title: "Validate Supply Chain Inputs", validator_id: "supply_chain.validate_inputs_v0" },
     ],
   },
 
@@ -443,8 +433,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_inputs", title: "Validate Churn Inputs",
-        fn: "(inputs) => { const threshold = Number(inputs.threshold); const period = Number(inputs.period_days); const threshold_ok = threshold >= 0.0 && threshold <= 1.0; const period_ok = Number.isInteger(period) && period > 0; return { ok: true, value: { inputs_valid: threshold_ok && period_ok, threshold, period_days: period, threshold_ok, period_ok }, step_id: 'validate_inputs' }; }" },
+      { step_id: "validate_inputs", title: "Validate Churn Inputs", validator_id: "churn.validate_inputs_v0" },
     ],
   },
 
@@ -486,8 +475,7 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
       ]),
     ],
     validators: [
-      { step_id: "validate_inputs", title: "Validate Contract Gen Inputs",
-        fn: "(inputs) => { const a = String(inputs.party_a || '').trim(); const b = String(inputs.party_b || '').trim(); const date = String(inputs.effective_date || ''); const a_ok = a.length >= 2; const b_ok = b.length >= 2; const date_ok = /^\\d{4}-\\d{2}-\\d{2}$/.test(date); const parties_distinct = a.toLowerCase() !== b.toLowerCase(); return { ok: true, value: { inputs_valid: a_ok && b_ok && date_ok && parties_distinct, party_a_ok: a_ok, party_b_ok: b_ok, date_ok, parties_distinct, effective_date: date }, step_id: 'validate_inputs' }; }" },
+      { step_id: "validate_inputs", title: "Validate Contract Gen Inputs", validator_id: "contract_gen.validate_inputs_v0" },
     ],
   },
 
