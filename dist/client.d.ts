@@ -10,4 +10,4 @@ export declare const movaPost: (c: MovaConfig, path: string, body: unknown) => P
 export declare const movaGet: (c: MovaConfig, path: string) => Promise<unknown>;
 export declare const movaPut: (c: MovaConfig, path: string, body: unknown) => Promise<unknown>;
 export declare const movaDelete: (c: MovaConfig, path: string) => Promise<unknown>;
-export declare function movaRunSteps(cfg: MovaConfig, contractId: string, validators: ValidatorRef[]): Promise<FlatRunnerResult>;
+export declare function movaRunSteps(cfg: MovaConfig, contractId: string, validators: ValidatorRef[], initialInputs?: Record<string, unknown>): Promise<FlatRunnerResult>;

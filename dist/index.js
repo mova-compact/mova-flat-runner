@@ -285,7 +285,7 @@ async function executeTool(name, args) {
                 return normalizeError(e, requestId);
             }
             const validators = (manifest.validators ?? []);
-            const result = await movaRunSteps(config, cid, validators);
+            const result = await movaRunSteps(config, cid, validators, inputs);
             return JSON.stringify(result);
         }
         // ── mova_decide ───────────────────────────────────────────────────────────

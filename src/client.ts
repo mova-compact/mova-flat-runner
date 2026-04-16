@@ -87,9 +87,10 @@ export const movaDelete = (c: MovaConfig, path: string)                 => movaR
 // No dynamic code execution — only pre-registered functions are allowed.
 
 export async function movaRunSteps(
-  cfg:        MovaConfig,
-  contractId: string,
-  validators: ValidatorRef[],
+  cfg:           MovaConfig,
+  contractId:    string,
+  validators:    ValidatorRef[],
+  initialInputs: Record<string, unknown> = {},
 ): Promise<FlatRunnerResult> {
   let analysis: Record<string, unknown> = {};
 
@@ -124,6 +125,10 @@ export async function movaRunSteps(
         }
       } catch { /* non-fatal */ }
 
+      // Validators receive original inputs merged with LLM analysis.
+      // This ensures typed input fields (bureau_score, leverage, etc.) are
+      // always available, regardless of whether the LLM echoes them back.
+      const validatorCtx = { ...initialInputs, ...analysis };
       for (const v of validators) {
         const fn = VALIDATOR_REGISTRY.get(v.validator_id);
         if (!fn) {
@@ -131,7 +136,7 @@ export async function movaRunSteps(
           continue;
         }
         try {
-          const res = fn(analysis);
+          const res = fn(validatorCtx);
           Object.assign(analysis, res.value ?? {});
         } catch (e) {
           analysis[`${v.step_id}_error`] = `VALIDATOR_FAILED: ${String(e)}`;

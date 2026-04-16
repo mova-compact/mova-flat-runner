@@ -63,7 +63,7 @@ export const movaDelete = (c, path) => movaRequest(c, "DELETE", path);
 //
 // Validators are looked up in VALIDATOR_REGISTRY by validator_id.
 // No dynamic code execution — only pre-registered functions are allowed.
-export async function movaRunSteps(cfg, contractId, validators) {
+export async function movaRunSteps(cfg, contractId, validators, initialInputs = {}) {
     let analysis = {};
     for (const stepId of ["analyze", "verify", "decide"]) {
         let result;
@@ -95,6 +95,10 @@ export async function movaRunSteps(cfg, contractId, validators) {
                 }
             }
             catch { /* non-fatal */ }
+            // Validators receive original inputs merged with LLM analysis.
+            // This ensures typed input fields (bureau_score, leverage, etc.) are
+            // always available, regardless of whether the LLM echoes them back.
+            const validatorCtx = { ...initialInputs, ...analysis };
             for (const v of validators) {
                 const fn = VALIDATOR_REGISTRY.get(v.validator_id);
                 if (!fn) {
@@ -102,7 +106,7 @@ export async function movaRunSteps(cfg, contractId, validators) {
                     continue;
                 }
                 try {
-                    const res = fn(analysis);
+                    const res = fn(validatorCtx);
                     Object.assign(analysis, res.value ?? {});
                 }
                 catch (e) {

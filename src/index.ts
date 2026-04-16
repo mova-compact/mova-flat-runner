@@ -326,7 +326,7 @@ async function executeTool(name: string, args: Args): Promise<string> {
       }
 
       const validators = (manifest.validators ?? []) as ValidatorRef[];
-      const result     = await movaRunSteps(config, cid, validators);
+      const result     = await movaRunSteps(config, cid, validators, inputs);
       return JSON.stringify(result);
     }
 
