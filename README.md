@@ -1,20 +1,47 @@
 # mova-flat-runner
 
-MCP server that gives Claude (and any MCP-compatible AI client) a set of governed decision workflows — invoice approval, AML triage, credit scoring, trade review, compliance audit, and more.
+A governed AI execution runtime for Claude and any MCP-compatible AI client.
 
-**The key difference from a plain AI tool:** the agent cannot approve or reject anything on its own. Every workflow runs through a mandatory human decision gate, and every decision is stored in a cryptographically signed audit trail. Designed for EU AI Act and AMLD6 compliance.
+You describe a decision workflow in plain language — invoice approval, supplier screening, credit review, anything that requires a human gate and an audit trail — and MOVA turns it into a structured contract that your AI assistant can run. Every execution is gated by a human decision and recorded in a cryptographically signed audit journal.
+
+**The built-in workflows (invoice OCR, AML triage, credit scoring, and others) are live examples. The actual product is the ability to build your own.**
 
 ---
 
-## What it looks like in practice
+## How to create your own contract
 
-You share an invoice image. Claude extracts the vendor, IBAN, line items, and totals; checks for duplicate submissions, IBAN changes, and VAT mismatches; shows you a risk score with findings; then asks: **approve / reject / escalate / request info**. After your choice it returns a signed audit receipt with a permanent record of who decided what and when.
+Tell Claude what you want to automate. Claude calls `mova_calibrate_intent`, which asks clarifying questions and crystallises your intent into a structured contract definition. From that point, your workflow runs just like the built-in ones — with a human gate, local validation rules, and a full audit trail.
 
-Try it — paste this into Claude after setup:
+Example prompts to get started:
 
-> Process this invoice: `https://raw.githubusercontent.com/mova-compact/mova-flat-runner/main/test_invoice_INV-2026-0441.png`
+> *"I want a workflow that screens new freelancer applications — checks their portfolio, validates tax ID, and routes high-risk cases to manual review."*
 
-Same pattern works for AML cases, credit applications, supplier risk reviews, and so on.
+> *"Create a contract for approving refund requests above €500 — extract the reason, cross-check the order ID, and log every decision."*
+
+> *"Build a supplier onboarding workflow with sanctions screening and a compliance officer approval step."*
+
+---
+
+## Built-in workflows (live examples)
+
+These come ready to use and show what a MOVA contract looks like in practice.
+
+| Workflow | What it does |
+|---|---|
+| Invoice approval | OCR extraction, duplicate check, IBAN change detection, VAT validation |
+| AML triage | Sanctions screening, PEP check, risk scoring, mandatory escalation rules |
+| Credit review | DTI calculation, bureau score validation, hard reject thresholds |
+| Trade review | Leverage limits, position size escalation |
+| Purchase order | PO approval with structured line-item review |
+| Supplier risk | Multi-supplier assessment with country and compliance checks |
+| Compliance audit | Policy violation review with severity grading |
+| Complaint handling | Customer complaint triage and resolution routing |
+| Churn prediction | Retention risk scoring with recommended action |
+| Contract generation | Structured contract drafting from natural language brief |
+
+Try the invoice example — paste this into Claude after setup:
+
+> *"Process this invoice: `https://raw.githubusercontent.com/mova-compact/mova-flat-runner/main/test_invoice_INV-2026-0441.png`"*
 
 ---
 
@@ -55,7 +82,7 @@ claude mcp env mova LLM_KEY=sk-or-v1-YOUR_OPENROUTER_KEY
 
 ### Cursor / other MCP clients
 
-Same pattern as Claude Desktop — point to `npx mova-mcp` with the three env vars.
+Same pattern as Claude Desktop — `npx -y mova-mcp` with the three env vars.
 
 ---
 
@@ -70,34 +97,22 @@ Same pattern as Claude Desktop — point to `npx mova-mcp` with the three env va
 
 ---
 
-## Available workflows
+## All tools
 
-Each workflow follows the same structure: structured input → AI analysis → local validation → human decision gate → signed audit receipt.
+**Contract execution**
+`mova_hitl_start` · `mova_hitl_start_po` · `mova_hitl_start_trade` · `mova_hitl_start_aml` · `mova_hitl_start_complaint` · `mova_hitl_start_compliance` · `mova_hitl_start_credit` · `mova_hitl_start_supply_chain` · `mova_hitl_start_churn` · `mova_hitl_start_contract_gen`
 
-| Tool | What it handles |
-|---|---|
-| `mova_hitl_start` | Supplier invoice — OCR, duplicate check, IBAN change detection, VAT validation |
-| `mova_hitl_start_po` | Purchase order approval |
-| `mova_hitl_start_aml` | AML / sanctions screening, PEP check, risk scoring |
-| `mova_hitl_start_trade` | Crypto trade review — leverage limits, position size escalation |
-| `mova_hitl_start_credit` | Credit application — DTI calculation, bureau score check |
-| `mova_hitl_start_supply_chain` | Supplier risk assessment |
-| `mova_hitl_start_compliance` | Compliance audit |
-| `mova_hitl_start_complaint` | Customer complaint handling |
-| `mova_hitl_start_churn` | Churn risk prediction with retention action |
-| `mova_hitl_start_contract_gen` | Contract generation |
+**Custom contracts**
+`mova_calibrate_intent` · `mova_register_contract` · `mova_run_contract` · `mova_run_status` · `mova_list_my_contracts` · `mova_set_contract_visibility` · `mova_delete_contract`
 
-### Decision and audit tools
+**Human decisions & audit**
+`mova_hitl_decide` · `mova_hitl_status` · `mova_hitl_audit` · `mova_hitl_audit_compact`
 
-`mova_hitl_decide` · `mova_hitl_status` · `mova_hitl_audit` · `mova_hitl_audit_compact` · `mova_calibrate_intent`
-
-### Connector registry (bring your own OCR / ERP / VAT API)
-
+**Connectors (bring your own OCR / ERP / VAT API)**
 `mova_list_connectors` · `mova_register_connector` · `mova_list_connector_overrides` · `mova_delete_connector_override`
 
-### Custom contract registry
-
-`mova_register_contract` · `mova_list_my_contracts` · `mova_run_contract` · `mova_run_status` · `mova_set_contract_visibility` · `mova_delete_contract`
+**Diagnostics**
+`mova_health`
 
 ---
 
