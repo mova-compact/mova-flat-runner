@@ -1,6 +1,6 @@
 {
   "name": "mova-mcp",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "mcpName": "io.github.mova-compact/mova-flat-runner",
   "description": "MCP server for governed AI workflows — invoice OCR, AML triage, credit review, and custom contracts with human approval gates and audit trails",
   "type": "module",
