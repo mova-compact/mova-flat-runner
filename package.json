@@ -1,24 +1,30 @@
 {
   "name": "mova-mcp",
   "version": "2.0.4",
-  "description": "MOVA contract execution runtime — structured ENV/DS contract mode, MCP Resources, 6 generic tools",
+  "description": "MCP server for governed AI workflows — invoice OCR, AML triage, credit review, and custom contracts with human approval gates and audit trails",
   "type": "module",
   "license": "MIT-0",
   "keywords": [
     "mcp",
-    "mova",
+    "mcp-server",
+    "model-context-protocol",
+    "claude",
+    "cursor",
+    "anthropic",
     "hitl",
+    "human-in-the-loop",
+    "audit-trail",
+    "invoice-ocr",
     "aml",
     "compliance",
-    "invoice",
-    "ocr",
-    "anthropic",
-    "claude"
+    "workflow-automation",
+    "contract-execution",
+    "mova"
   ],
-  "homepage": "https://github.com/mova-compact/mova-mcp",
+  "homepage": "https://github.com/mova-compact/mova-flat-runner",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mova-compact/mova-mcp.git"
+    "url": "git+https://github.com/mova-compact/mova-flat-runner.git"
   },
   "bin": {
     "mova-mcp": "dist/index.js"

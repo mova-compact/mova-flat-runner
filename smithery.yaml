@@ -1,0 +1,54 @@
+name: mova-flat-runner
+displayName: MOVA Flat Runner
+description: >
+  Governed AI workflow execution for Claude and MCP-compatible clients.
+  Run invoice OCR, AML triage, credit review, supplier screening, and
+  custom contracts — each with a mandatory human decision gate and a
+  cryptographically signed audit trail.
+
+  Built-in workflows are live examples. The core feature is
+  mova_calibrate_intent: describe any business process in plain language
+  and Claude turns it into a structured contract you can run immediately.
+
+categories:
+  - productivity
+  - finance
+  - compliance
+  - automation
+
+tags:
+  - invoice
+  - ocr
+  - hitl
+  - audit
+  - aml
+  - compliance
+  - workflow
+  - human-in-the-loop
+  - contract-execution
+  - eu-ai-act
+
+license: MIT-0
+homepage: https://github.com/mova-compact/mova-flat-runner
+repository: https://github.com/mova-compact/mova-flat-runner
+
+install:
+  type: npx
+  package: mova-mcp
+
+config:
+  env:
+    MOVA_API_KEY:
+      description: MOVA API key. Use the shared test key — test-key-001 — to get started without registration.
+      required: true
+      default: test-key-001
+    LLM_KEY:
+      description: OpenRouter API key (sk-or-v1-...). Required for workflow runs that include LLM analysis steps.
+      required: true
+    LLM_MODEL:
+      description: OpenRouter model ID for LLM analysis steps.
+      required: false
+      default: openai/gpt-4o-mini
+    MOVA_API_URL:
+      description: Override the MOVA API base URL. Defaults to https://api.mova-lab.eu
+      required: false
