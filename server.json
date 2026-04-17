@@ -1,0 +1,48 @@
+{
+  "name": "io.github.mova-compact/mova-flat-runner",
+  "description": "Governed AI workflow execution for Claude and MCP-compatible clients. Run invoice OCR, AML triage, credit review, supplier screening, and custom contracts — each with a mandatory human decision gate and a cryptographically signed audit trail.",
+  "repository": {
+    "url": "https://github.com/mova-compact/mova-flat-runner"
+  },
+  "packages": [
+    {
+      "registry_name": "npm",
+      "name": "mova-mcp",
+      "version": "2.0.5",
+      "package_arguments": [
+        {
+          "type": "named",
+          "name": "MOVA_API_KEY",
+          "description": "MOVA API key. Use test-key-001 to get started without registration.",
+          "is_required": true,
+          "format": "env",
+          "value_hint": "test-key-001"
+        },
+        {
+          "type": "named",
+          "name": "LLM_KEY",
+          "description": "OpenRouter API key (sk-or-v1-...). Required for workflow runs with LLM analysis steps.",
+          "is_required": true,
+          "format": "env",
+          "value_hint": "sk-or-v1-..."
+        },
+        {
+          "type": "named",
+          "name": "LLM_MODEL",
+          "description": "OpenRouter model ID for LLM analysis steps.",
+          "is_required": false,
+          "format": "env",
+          "default": "openai/gpt-4o-mini"
+        },
+        {
+          "type": "named",
+          "name": "MOVA_API_URL",
+          "description": "Override the MOVA API base URL.",
+          "is_required": false,
+          "format": "env",
+          "default": "https://api.mova-lab.eu"
+        }
+      ]
+    }
+  ]
+}
