@@ -31,3 +31,38 @@ jobs:
 
       - name: Test
         run: npm test
+
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish if version changed
+        run: |
+          PUBLISHED=$(npm view mova-mcp version 2>/dev/null || echo "0.0.0")
+          LOCAL=$(node -p "require('./package.json').version")
+          if [ "$LOCAL" != "$PUBLISHED" ]; then
+            echo "Publishing $LOCAL (was $PUBLISHED)"
+            npm publish
+          else
+            echo "Version $LOCAL already published — skipping"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
