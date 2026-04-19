@@ -8,7 +8,7 @@ import { movaPost, movaGet, movaPut, movaDelete, movaRunSteps, shortId, } from "
 import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
-const RUNNER_VERSION = "2.0.4";
+const RUNNER_VERSION = "2.0.7";
 // ── Config helpers ────────────────────────────────────────────────────────────
 //
 // cfgBase — only MOVA_API_KEY required. Used for query/registry/decide/connector.

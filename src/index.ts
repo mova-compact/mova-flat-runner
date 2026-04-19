@@ -18,7 +18,7 @@ import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr, type ValidatorRef } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
 
-const RUNNER_VERSION = "2.0.4";
+const RUNNER_VERSION = "2.0.7";
 
 // ── Config helpers ────────────────────────────────────────────────────────────
 //
