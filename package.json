@@ -1,6 +1,6 @@
 {
   "name": "mova-mcp",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "mcpName": "io.github.mova-compact/mova-flat-runner",
   "description": "MCP server for governed AI workflows — invoice OCR, AML triage, credit review, and custom contracts with human approval gates and audit trails",
   "type": "module",
@@ -35,12 +35,12 @@
     "README.md"
   ],
   "scripts": {
-    "build":       "tsc && node -e \"const fs=require('fs');const p='dist/index.js';let c=fs.readFileSync(p,'utf8');if(!c.startsWith('#!/usr/bin/env node'))fs.writeFileSync(p,'#!/usr/bin/env node\\n'+c);fs.chmodSync(p,0o755);\"",
-    "dev":         "tsc --watch",
-    "start":       "node dist/index.js",
-    "test:build":  "tsc -p tsconfig.test.json",
-    "test":        "npm run test:build && node --test dist-test/tests/unit/*.test.js dist-test/tests/negative/*.test.js",
-    "smoke:api":   "npm run test:build && node dist-test/tests/smoke/api.js"
+    "build": "tsc && node -e \"const fs=require('fs');const p='dist/index.js';let c=fs.readFileSync(p,'utf8');if(!c.startsWith('#!/usr/bin/env node'))fs.writeFileSync(p,'#!/usr/bin/env node\\n'+c);fs.chmodSync(p,0o755);\"",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "test:build": "tsc -p tsconfig.test.json",
+    "test": "npm run test:build && node --test dist-test/tests/unit/*.test.js dist-test/tests/negative/*.test.js",
+    "smoke:api": "npm run test:build && node dist-test/tests/smoke/api.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2"

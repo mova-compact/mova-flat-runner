@@ -484,6 +484,7 @@ async function executeTool(name: string, args: Args): Promise<string> {
             return JSON.stringify(await movaGet(config, `/api/v1/contracts/my${q}`));
           case "register":
             return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
+              contract_id:         args.contract_id,
               source_url:          args.source_url,
               title:               args.title,
               version:             args.version,
