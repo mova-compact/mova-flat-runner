@@ -56,6 +56,10 @@ jobs:
 
       - name: Publish if version changed
         run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret not set — skipping publish"
+            exit 0
+          fi
           PUBLISHED=$(npm view mova-mcp version 2>/dev/null || echo "0.0.0")
           LOCAL=$(node -p "require('./package.json').version")
           if [ "$LOCAL" != "$PUBLISHED" ]; then
