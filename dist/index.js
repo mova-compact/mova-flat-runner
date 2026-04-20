@@ -576,6 +576,20 @@ function checkInvokeAuth(req) {
     const auth = req.headers["authorization"] ?? "";
     return auth === `Bearer ${INVOKE_TOKEN}`;
 }
+// Sliding-window rate limiter: max 60 /invoke calls per 60-second window.
+const INVOKE_MAX_PER_MINUTE = 60;
+const invokeTimestamps = [];
+function checkInvokeRateLimit() {
+    const now = Date.now();
+    const windowStart = now - 60_000;
+    while (invokeTimestamps.length > 0 && invokeTimestamps[0] < windowStart) {
+        invokeTimestamps.shift();
+    }
+    if (invokeTimestamps.length >= INVOKE_MAX_PER_MINUTE)
+        return false;
+    invokeTimestamps.push(now);
+    return true;
+}
 const httpPort = parseInt(process.env.MOVA_HTTP_PORT ?? "0", 10);
 if (httpPort > 0) {
     if (!INVOKE_TOKEN) {
@@ -599,6 +613,11 @@ if (httpPort > 0) {
             if (!checkInvokeAuth(req)) {
                 res.writeHead(401, { "Content-Type": "application/json", ...SECURITY_HEADERS });
                 res.end(JSON.stringify({ ok: false, error: "Unauthorized" }));
+                return;
+            }
+            if (!checkInvokeRateLimit()) {
+                res.writeHead(429, { "Content-Type": "application/json", ...SECURITY_HEADERS });
+                res.end(JSON.stringify({ ok: false, error: "Rate limit exceeded. Max 60 requests per minute." }));
                 return;
             }
             try {
