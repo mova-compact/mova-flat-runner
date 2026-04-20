@@ -509,7 +509,7 @@ async function executeTool(name, args) {
             }
             catch (e) {
                 checks.api_status = "unreachable";
-                checks.api_error = e instanceof Error ? e.message : String(e);
+                checks.api_error = "API unreachable";
             }
             return JSON.stringify({ ok: true, request_id: requestId, checks });
         }
@@ -562,35 +562,63 @@ function readBody(req) {
     });
 }
 // ── Transport ─────────────────────────────────────────────────────────────────
+const SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+};
+// Bearer token required for /invoke and /mcp when MOVA_INVOKE_TOKEN is set.
+// Set via: MOVA_INVOKE_TOKEN=<secret> to protect the HTTP endpoints.
+const INVOKE_TOKEN = process.env.MOVA_INVOKE_TOKEN ?? "";
+function checkInvokeAuth(req) {
+    if (!INVOKE_TOKEN)
+        return true; // token not configured — open (warn at startup)
+    const auth = req.headers["authorization"] ?? "";
+    return auth === `Bearer ${INVOKE_TOKEN}`;
+}
 const httpPort = parseInt(process.env.MOVA_HTTP_PORT ?? "0", 10);
 if (httpPort > 0) {
+    if (!INVOKE_TOKEN) {
+        process.stderr.write("[WARN] mova-mcp: MOVA_INVOKE_TOKEN is not set — /invoke and /mcp endpoints are unauthenticated. " +
+            "Set MOVA_INVOKE_TOKEN=<secret> to restrict access.\n");
+    }
     const httpServer = createServer(async (req, res) => {
         if (req.url === "/mcp") {
+            if (!checkInvokeAuth(req)) {
+                res.writeHead(401, { "Content-Type": "application/json", ...SECURITY_HEADERS });
+                res.end(JSON.stringify({ ok: false, error: "Unauthorized" }));
+                return;
+            }
             const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
             const srv = buildServer();
             await srv.connect(transport);
             await transport.handleRequest(req, res);
         }
         else if (req.url === "/invoke" && req.method === "POST") {
+            if (!checkInvokeAuth(req)) {
+                res.writeHead(401, { "Content-Type": "application/json", ...SECURITY_HEADERS });
+                res.end(JSON.stringify({ ok: false, error: "Unauthorized" }));
+                return;
+            }
             try {
                 const body = await readBody(req);
                 const { tool, args } = JSON.parse(body);
                 const result = await executeTool(tool, args);
-                res.writeHead(200, { "Content-Type": "application/json" });
+                res.writeHead(200, { "Content-Type": "application/json", ...SECURITY_HEADERS });
                 res.end(result);
             }
             catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                res.writeHead(500, { "Content-Type": "application/json" });
+                res.writeHead(500, { "Content-Type": "application/json", ...SECURITY_HEADERS });
                 res.end(JSON.stringify(flatErr(ERR.API_REQUEST_FAILED, msg)));
             }
         }
         else if (req.url === "/health") {
-            res.writeHead(200, { "Content-Type": "application/json" });
+            res.writeHead(200, { "Content-Type": "application/json", ...SECURITY_HEADERS });
             res.end(JSON.stringify({ ok: true, service: "mova-mcp", version: RUNNER_VERSION }));
         }
         else {
-            res.writeHead(404);
+            res.writeHead(404, SECURITY_HEADERS);
             res.end();
         }
     });
