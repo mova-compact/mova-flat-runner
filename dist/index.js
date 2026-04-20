@@ -579,8 +579,9 @@ function checkInvokeAuth(req) {
 const httpPort = parseInt(process.env.MOVA_HTTP_PORT ?? "0", 10);
 if (httpPort > 0) {
     if (!INVOKE_TOKEN) {
-        process.stderr.write("[WARN] mova-mcp: MOVA_INVOKE_TOKEN is not set — /invoke and /mcp endpoints are unauthenticated. " +
-            "Set MOVA_INVOKE_TOKEN=<secret> to restrict access.\n");
+        process.stderr.write("[ERROR] mova-mcp: MOVA_INVOKE_TOKEN must be set when MOVA_HTTP_PORT is active. " +
+            "Set MOVA_INVOKE_TOKEN=<secret> to protect /invoke and /mcp endpoints. Refusing to start.\n");
+        process.exit(1);
     }
     const httpServer = createServer(async (req, res) => {
         if (req.url === "/mcp") {

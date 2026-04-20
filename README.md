@@ -1,410 +1,153 @@
-# mova-flat-runner
+# MCP Registry
 
-**Public test release — lightweight contract execution for Claude and MCP-compatible AI clients.**
+The MCP registry provides MCP clients with a list of MCP servers, like an app store for MCP servers.
 
-MOVA Flat Runner is a small, practical facade for running AI-assisted business workflows with human approval and an audit trail.
+[**📤 Publish my MCP server**](docs/modelcontextprotocol-io/quickstart.mdx) | [**⚡️ Live API docs**](https://registry.modelcontextprotocol.io/docs) | [**👀 Ecosystem vision**](docs/design/ecosystem-vision.md) | 📖 **[Full documentation](./docs)**
 
-It gives Claude a contract-shaped way to handle bounded workflows such as invoice review, supplier screening, complaint triage, refund approval, purchase order review, or internal approval tasks.
+## Development Status
 
-This is intentionally **not** the full MOVA State engine.
+**2025-10-24 update**: The Registry API has entered an **API freeze (v0.1)** 🎉. For the next month or more, the API will remain stable with no breaking changes, allowing integrators to confidently implement support. This freeze applies to v0.1 while development continues on v0. We'll use this period to validate the API in real-world integrations and gather feedback to shape v1 for general availability. Thank you to everyone for your contributions and patience—your involvement has been key to getting us here!
 
-You do not need the broader MOVA ecosystem, a state machine setup, or a custom backend to try it. The goal of this repository is simple:
+**2025-09-08 update**: The registry has launched in preview 🎉 ([announcement blog post](https://blog.modelcontextprotocol.io/posts/2025-09-08-mcp-registry-preview/)). While the system is now more stable, this is still a preview release and breaking changes or data resets may occur. A general availability (GA) release will follow later. We'd love your feedback in [GitHub discussions](https://github.com/modelcontextprotocol/registry/discussions/new?category=ideas) or in the [#registry-dev Discord](https://discord.com/channels/1358869848138059966/1369487942862504016) ([joining details here](https://modelcontextprotocol.io/community/communication)).
 
-```
-connect MCP client
-→ run a contract-shaped workflow
-→ keep a human decision gate
-→ receive an audit trail
-```
+Current key maintainers:
+- **Adam Jones** (Anthropic) [@domdomegg](https://github.com/domdomegg)  
+- **Tadas Antanavicius** (PulseMCP) [@tadasant](https://github.com/tadasant)
+- **Toby Padilla** (GitHub) [@toby](https://github.com/toby)
+- **Radoslav (Rado) Dimitrov** (Stacklok) [@rdimitrov](https://github.com/rdimitrov)
 
-This repository is currently in a **public feedback phase**.
+## Contributing
 
-A temporary shared API key is provided so the Anthropic / MCP community can try the runner with minimal setup. After feedback is collected, the test API will be replaced by a production implementation with proper accounts, API keys, quotas, private connector configuration, and clearer deployment boundaries.
+We use multiple channels for collaboration - see [modelcontextprotocol.io/community/communication](https://modelcontextprotocol.io/community/communication).
 
-Use this release for testing, prototyping, and feedback.
+Often (but not always) ideas flow through this pipeline:
 
-> **Do not** send sensitive production data, regulated customer data, secrets, credentials, private keys, or confidential business documents through the shared test API.
+- **[Discord](https://modelcontextprotocol.io/community/communication)** - Real-time community discussions
+- **[Discussions](https://github.com/modelcontextprotocol/registry/discussions)** - Propose and discuss product/technical requirements
+- **[Issues](https://github.com/modelcontextprotocol/registry/issues)** - Track well-scoped technical work  
+- **[Pull Requests](https://github.com/modelcontextprotocol/registry/pulls)** - Contribute work towards issues
 
----
+### Quick start:
 
-## What it does
+#### Pre-requisites
 
-MOVA Flat Runner lets an AI assistant run a bounded workflow instead of improvising.
+- **Docker**
+- **Go 1.24.x**
+- **ko** - Container image builder for Go ([installation instructions](https://ko.build/install/))
+- **golangci-lint v2.4.0**
 
-It can:
-
-- run built-in demo workflows
-- run registered custom contracts
-- validate inputs before execution
-- call a configured LLM provider for analysis steps
-- keep a human decision gate before final outcome
-- record an audit trail for each run
-- work from Claude Desktop, Claude Code, Cursor, or other MCP-compatible clients
-
-The core idea:
-
-```
-AI proposes analysis
-contract constrains the workflow
-human approves the final decision
-audit records what happened
-```
-
----
-
-## What it is not
-
-This public test release is:
-
-- not a general autonomous agent
-- not a replacement for Claude Skills
-- not the full MOVA State 1.5 engine
-- not a certified compliance, credit, legal, medical, or financial decision system
-- not production infrastructure
-- not a place to send sensitive data through the shared API key
-- not a system that makes final business decisions without a human gate
-
-The runner is intentionally flat and practical. For high-risk, multi-step, policy-heavy execution with formal transition authority, the broader MOVA State engine is a separate layer.
-
----
-
-## Current release status
-
-| | |
-|---|---|
-| Status | Public test release |
-| API access | Temporary shared test key |
-| Target users | Anthropic / MCP community, AI workflow builders, automation experimenters |
-| Goal | Collect feedback before production release |
-
-The shared API key may be rate-limited, rotated, or disabled after the feedback phase.
-
-Production plans include individual API keys, account-scoped contract storage, quotas, private connector configuration, stronger audit export, clearer retention policy, and an optional private execution path for sensitive workflows.
-
----
-
-## Temporary test API access
-
-For this public test release, use:
-
-```
-MOVA_API_KEY=test-key-001
-```
-
-This key is shared and temporary. Use it only for testing, prototyping, and feedback — not for real customer data, regulated decisions, confidential documents, credentials, or production workflows.
-
-Use synthetic examples, public test files, or non-sensitive documents.
-
----
-
-## 60-second test
-
-After setup, ask Claude:
-
-> Use MOVA health check.
-
-Then try the invoice example:
-
-> Process this invoice: `https://raw.githubusercontent.com/mova-compact/mova-flat-runner/main/test_invoice_INV-2026-0441.png`
-
-Expected flow:
-
-```
-1. MOVA starts an invoice contract
-2. The invoice is analysed
-3. Verification findings are returned
-4. Claude asks you for a human decision
-5. You choose: approve / reject / escalate
-6. MOVA returns an audit receipt
-```
-
----
-
-## Built-in demo workflows
-
-These workflows are ready to use as live examples of the contract pattern. They are **demonstration workflows**, not certified domain systems.
-
-| Workflow | What it demonstrates |
-|---|---|
-| Invoice approval | OCR extraction, duplicate check, IBAN change detection, VAT validation |
-| Purchase order review | Structured line-item review and approval |
-| Supplier risk | Multi-supplier assessment with country and compliance checks |
-| Complaint handling | Customer complaint triage and resolution routing |
-| Compliance audit | Policy violation review with severity grading |
-| AML triage | Sanctions / PEP-style risk review as a demo pattern |
-| Credit review | Threshold-based review as a demo pattern |
-| Trade review | Risk and limit review as a demo pattern |
-| Churn prediction | Retention risk classification as a demo pattern |
-| Contract generation | Structured contract drafting from a natural language brief |
-
-> **Built-in workflows are examples. Custom contracts are the main idea.**
-
-The runner is useful when you want Claude to follow a bounded workflow instead of inventing a process on the fly.
-
----
-
-## How to create your own contract
-
-Tell Claude what workflow you want to create. Claude calls `mova_calibrate_intent`, which turns your plain-language request into a structured contract definition. After that, the workflow can be registered and run like the built-in examples.
-
-Example prompts:
-
-> I want a workflow that screens new freelancer applications, checks portfolio completeness, validates tax ID format, and routes high-risk cases to manual review.
-
-> Create a contract for approving refund requests above €500. It should extract the reason, check whether the order ID is present, and log every human decision.
-
-> Build a supplier onboarding workflow with document completeness checks and a compliance officer approval step.
-
-A contract defines:
-
-```
-goal
-inputs
-analysis steps
-verification checks
-human decision options
-audit outcome
-```
-
----
-
-## Setup
-
-### Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "mova": {
-      "command": "npx",
-      "args": ["-y", "mova-mcp"],
-      "env": {
-        "MOVA_API_KEY": "test-key-001",
-        "LLM_KEY": "sk-or-v1-YOUR_OPENROUTER_KEY",
-        "LLM_MODEL": "openai/gpt-4o-mini"
-      }
-    }
-  }
-}
-```
-
-Restart Claude Desktop. The MOVA tools appear automatically.
-
-### Claude Code
+#### Running the server
 
 ```bash
-claude mcp add mova -- npx -y mova-mcp
-claude mcp env mova MOVA_API_KEY=test-key-001
-claude mcp env mova LLM_KEY=sk-or-v1-YOUR_OPENROUTER_KEY
-claude mcp env mova LLM_MODEL=openai/gpt-4o-mini
+# Start full development environment
+make dev-compose
 ```
 
-Then verify: ask Claude Code `Use MOVA health check`.
+This starts the registry at [`localhost:8080`](http://localhost:8080) with PostgreSQL. The database uses ephemeral storage and is reset each time you restart the containers, ensuring a clean state for development and testing.
 
-### Cursor / other MCP clients
+**Note:** The registry uses [ko](https://ko.build) to build container images. The `make dev-compose` command automatically builds the registry image with ko and loads it into your local Docker daemon before starting the services.
 
-Command: `npx -y mova-mcp`
+By default, the registry seeds from the production API with a filtered subset of servers (to keep startup fast). This ensures your local environment mirrors production behavior and all seed data passes validation. For offline development you can seed from a file without validation with `MCP_REGISTRY_SEED_FROM=data/seed.json MCP_REGISTRY_ENABLE_REGISTRY_VALIDATION=false make dev-compose`.
 
-Required env vars:
+The setup can be configured with environment variables in [docker-compose.yml](./docker-compose.yml) - see [.env.example](./.env.example) for a reference.
 
-```
-MOVA_API_KEY=test-key-001
-LLM_KEY=sk-or-v1-YOUR_OPENROUTER_KEY
-LLM_MODEL=openai/gpt-4o-mini
-```
+<details>
+<summary>Alternative: Running a pre-built Docker image</summary>
 
----
+Pre-built Docker images are automatically published to GitHub Container Registry:
 
-## Environment variables
+```bash
+# Run latest stable release
+docker run -p 8080:8080 ghcr.io/modelcontextprotocol/registry:latest
 
-| Variable | Required | Description |
-|---|---|---|
-| `MOVA_API_KEY` | Yes | MOVA API key. Shared public test key: `test-key-001` |
-| `LLM_KEY` | Yes for workflow runs | OpenRouter key for LLM-backed analysis steps |
-| `LLM_MODEL` | No | Model ID (default: `openai/gpt-4o-mini`) |
-| `MOVA_API_URL` | No | Override API base URL (default: `https://api.mova-lab.eu`) |
-| `MOVA_API_TIMEOUT_MS` | No | API timeout override in milliseconds |
+# Run latest from main branch (continuous deployment)
+docker run -p 8080:8080 ghcr.io/modelcontextprotocol/registry:main
 
-> Never commit your real `LLM_KEY` to a repository.
+# Run specific release version
+docker run -p 8080:8080 ghcr.io/modelcontextprotocol/registry:v1.0.0
 
----
-
-## Tools
-
-### Contract execution
-
-```
-mova_hitl_start            invoice approval
-mova_hitl_start_po         purchase order review
-mova_hitl_start_aml        AML triage
-mova_hitl_start_trade      trade review
-mova_hitl_start_complaint  complaint handling
-mova_hitl_start_compliance compliance audit
-mova_hitl_start_credit     credit review
-mova_hitl_start_supply_chain  supplier risk
-mova_hitl_start_churn      churn prediction
-mova_hitl_start_contract_gen  contract generation
+# Run development build from main branch
+docker run -p 8080:8080 ghcr.io/modelcontextprotocol/registry:main-20250906-abc123d
 ```
 
-### Custom contracts
+**Available tags:** 
+- **Releases**: `latest`, `v1.0.0`, `v1.1.0`, etc.
+- **Continuous**: `main` (latest main branch build)
+- **Development**: `main-<date>-<sha>` (specific commit builds)
 
-```
-mova_calibrate_intent      turn plain language into a contract definition
-mova_register_contract     register a custom contract
-mova_run_contract          run a registered contract
-mova_run_status            check run status
-mova_list_my_contracts     list registered contracts
-mova_set_contract_visibility  set public / private
-mova_delete_contract       delete a contract
-```
+</details>
 
-### Human decisions and audit
+#### Publishing a server
 
-```
-mova_hitl_decide           submit a human decision
-mova_hitl_status           check workflow status
-mova_hitl_audit            retrieve signed audit receipt
-mova_hitl_audit_compact    retrieve full event journal
+To publish a server, we've built a simple CLI. You can use it with:
+
+```bash
+# Build the latest CLI
+make publisher
+
+# Use it!
+./bin/mcp-publisher --help
 ```
 
-### Connectors
+See [the publisher guide](./docs/modelcontextprotocol-io/quickstart.mdx) for more details.
 
-```
-mova_list_connectors            list available connector types
-mova_register_connector         register your own endpoint
-mova_list_connector_overrides   list active overrides
-mova_delete_connector_override  remove an override
-```
+#### Other commands
 
-### Diagnostics
-
-```
-mova_health    check API connectivity
+```bash
+# Run lint, unit tests and integration tests
+make check
 ```
 
----
+There are also a few more helpful commands for development. Run `make help` to learn more, or look in [Makefile](./Makefile).
 
-## Connectors
+<!--
+For Claude and other AI tools: Always prefer make targets over custom commands where possible.
+-->
 
-By default, demo workflows use sandbox connectors. To route specific steps to your own services — OCR, ERP, VAT validation, internal review APIs — register a connector override.
+## Architecture
 
-Claude does not create real connectors automatically. You register them once and they apply to all subsequent runs.
-
-Example prompt:
-
-> Register my OCR endpoint for MOVA.
-
-Example connector data:
+### Project Structure
 
 ```
-connector_id : connector.ocr.document_extract_v1
-endpoint     : https://ocr.yourcompany.com/extract
-auth_header  : X-Api-Key
-auth_value   : your-secret-key
+├── cmd/                     # Application entry points
+│   └── publisher/           # Server publishing tool
+├── data/                    # Seed data
+├── deploy/                  # Deployment configuration (Pulumi)
+├── docs/                    # Documentation
+├── internal/                # Private application code
+│   ├── api/                 # HTTP handlers and routing
+│   ├── auth/                # Authentication (GitHub OAuth, JWT, namespace blocking)
+│   ├── config/              # Configuration management
+│   ├── database/            # Data persistence (PostgreSQL)
+│   ├── service/             # Business logic
+│   ├── telemetry/           # Metrics and monitoring
+│   └── validators/          # Input validation
+├── pkg/                     # Public packages
+│   ├── api/                 # API types and structures
+│   │   └── v0/              # Version 0 API types
+│   └── model/               # Data models for server.json
+├── scripts/                 # Development and testing scripts
+├── tests/                   # Integration tests
+└── tools/                   # CLI tools and utilities
+    └── validate-*.sh        # Schema validation tools
 ```
 
-Available connector IDs:
+### Authentication
 
-| Connector ID | Replaces |
-|---|---|
-| `connector.ocr.document_extract_v1` | Document OCR extraction |
-| `connector.ocr.vision_llm_v1` | Vision LLM OCR |
-| `connector.finance.duplicate_check_v1` | Duplicate invoice detection |
-| `connector.tax.vat_validate_v1` | VAT number validation |
-| `connector.erp.invoice_post_v1` | ERP invoice posting |
+Publishing supports multiple authentication methods:
+- **GitHub OAuth** - For publishing by logging into GitHub
+- **GitHub OIDC** - For publishing from GitHub Actions
+- **DNS verification** - For proving ownership of a domain and its subdomains
+- **HTTP verification** - For proving ownership of a domain
 
-> Do not use production connector credentials during the public test phase unless you understand the current deployment and data flow.
+The registry validates namespace ownership when publishing. E.g. to publish...:
+- `io.github.domdomegg/my-cool-mcp` you must login to GitHub as `domdomegg`, or be in a GitHub Action on domdomegg's repos
+- `me.adamjones/my-cool-mcp` you must prove ownership of `adamjones.me` via DNS or HTTP challenge
 
----
+## Community Projects
 
-## Audit journal
+Check out [community projects](docs/community-projects.md) to explore notable registry-related work created by the community.
 
-Every contract execution produces an immutable event log. The journal records exactly what happened, when, and who decided — from contract start to final receipt.
+## More documentation
 
-Example:
-
-```jsonl
-{"event":"contract_started","contract_id":"cnt_3f8a1b","contract_type":"invoice_approval","at":"2026-04-16T14:22:58Z"}
-{"event":"step_completed","step":"analyze","duration_ms":1820,"at":"2026-04-16T14:23:00Z"}
-{"event":"step_completed","step":"verify","findings":["iban_change_detected","ocr_confidence_low"],"at":"2026-04-16T14:23:03Z"}
-{"event":"decision_point","question":"How do you want to proceed?","options":["approve","reject","escalate_accountant"],"recommended":"escalate_accountant","at":"2026-04-16T14:23:05Z"}
-{"event":"human_decision","option":"escalate_accountant","reason":"IBAN changed — routing to accountant for manual check","actor":"user","at":"2026-04-16T14:23:41Z"}
-{"event":"contract_completed","verdict":"partially_fulfilled","receipt_id":"rec_9c2d4e","signature":"sha256:a3f1c8...","at":"2026-04-16T14:23:41Z"}
-```
-
-Retrieve it with `mova_hitl_audit` (signed receipt) or `mova_hitl_audit_compact` (full event chain).
-
-During the public test phase, audit storage is part of the test infrastructure. Retention, export, and account-level controls will be defined before production release.
-
----
-
-## Safety model
-
-```
-contract defines the workflow
-local validation checks inputs
-AI analysis is bounded by the contract
-human decision is required before final outcome
-audit records the run
-```
-
-The runner does not give the model uncontrolled authority. A workflow should not claim that an external action was completed unless that action is explicitly part of the configured connector path and the result is returned by the API.
-
----
-
-## Feedback wanted
-
-This release is for learning what people actually want from contract-shaped AI execution.
-
-Useful feedback:
-
-- which workflow you tried
-- where setup was confusing
-- whether the human gate felt useful
-- whether the audit trail was understandable
-- what contract you would want to build next
-- what would make this safe enough for real work
-- which MCP client you used
-
-Please open a GitHub issue with feedback, bugs, or workflow requests.
-
----
-
-## Roadmap to production
-
-After the public feedback phase:
-
-```
-individual API keys
-account-scoped contract storage
-quotas and rate limits
-private connector configuration
-clearer data retention policy
-stronger audit export
-production deployment boundary
-optional private execution path for sensitive workflows
-```
-
----
-
-## Relationship to MOVA
-
-MOVA Flat Runner is a lightweight facade from the broader MOVA contract execution approach. It is designed for quick testing and practical use with MCP-compatible AI clients. It is not the full MOVA State engine.
-
-```
-MOVA Flat Runner   = lightweight contract execution facade
-MOVA State Engine  = proof-oriented state transition machine for heavier business processes
-```
-
-You can use the flat runner without understanding or installing the full MOVA ecosystem.
-
----
-
-## License
-
-MIT-0
+See the [documentation](./docs) for more details if your question has not been answered here!
