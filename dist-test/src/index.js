@@ -8,7 +8,7 @@ import { movaPost, movaGet, movaPut, movaDelete, movaRunSteps, shortId, } from "
 import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
-const RUNNER_VERSION = "2.0.2";
+const RUNNER_VERSION = "2.0.7";
 // ── Config helpers ────────────────────────────────────────────────────────────
 //
 // cfgBase — only MOVA_API_KEY required. Used for query/registry/decide/connector.
@@ -135,6 +135,7 @@ const TOOLS = [
                 title: { type: "string" },
                 version: { type: "string" },
                 execution_mode: { type: "string", description: "deterministic | bounded_variance | ai_assisted | human_gated" },
+                execution_type: { type: "string", description: "agent = executed locally by Claude Code (flow.json returned) | server = executed server-side via HITL engine" },
                 description: { type: "string" },
                 required_connectors: { type: "array", items: { type: "string" } },
                 visibility: { type: "string", description: "private or public" },
@@ -455,10 +456,12 @@ async function executeTool(name, args) {
                         return JSON.stringify(await movaGet(config, `/api/v1/contracts/my${q}`));
                     case "register":
                         return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
+                            contract_id: args.contract_id,
                             source_url: args.source_url,
                             title: args.title,
                             version: args.version,
                             execution_mode: args.execution_mode,
+                            execution_type: args.execution_type ?? "agent",
                             description: args.description,
                             required_connectors: args.required_connectors ?? [],
                             visibility: args.visibility ?? "private",
@@ -506,7 +509,7 @@ async function executeTool(name, args) {
             }
             catch (e) {
                 checks.api_status = "unreachable";
-                checks.api_error = e instanceof Error ? e.message : String(e);
+                checks.api_error = "API unreachable";
             }
             return JSON.stringify({ ok: true, request_id: requestId, checks });
         }
@@ -559,35 +562,83 @@ function readBody(req) {
     });
 }
 // ── Transport ─────────────────────────────────────────────────────────────────
+const SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+};
+// Bearer token required for /invoke and /mcp when MOVA_INVOKE_TOKEN is set.
+// Set via: MOVA_INVOKE_TOKEN=<secret> to protect the HTTP endpoints.
+const INVOKE_TOKEN = process.env.MOVA_INVOKE_TOKEN ?? "";
+function checkInvokeAuth(req) {
+    if (!INVOKE_TOKEN)
+        return true; // token not configured — open (warn at startup)
+    const auth = req.headers["authorization"] ?? "";
+    return auth === `Bearer ${INVOKE_TOKEN}`;
+}
+// Sliding-window rate limiter: max 60 /invoke calls per 60-second window.
+const INVOKE_MAX_PER_MINUTE = 60;
+const invokeTimestamps = [];
+function checkInvokeRateLimit() {
+    const now = Date.now();
+    const windowStart = now - 60_000;
+    while (invokeTimestamps.length > 0 && invokeTimestamps[0] < windowStart) {
+        invokeTimestamps.shift();
+    }
+    if (invokeTimestamps.length >= INVOKE_MAX_PER_MINUTE)
+        return false;
+    invokeTimestamps.push(now);
+    return true;
+}
 const httpPort = parseInt(process.env.MOVA_HTTP_PORT ?? "0", 10);
 if (httpPort > 0) {
+    if (!INVOKE_TOKEN) {
+        process.stderr.write("[ERROR] mova-mcp: MOVA_INVOKE_TOKEN must be set when MOVA_HTTP_PORT is active. " +
+            "Set MOVA_INVOKE_TOKEN=<secret> to protect /invoke and /mcp endpoints. Refusing to start.\n");
+        process.exit(1);
+    }
     const httpServer = createServer(async (req, res) => {
         if (req.url === "/mcp") {
+            if (!checkInvokeAuth(req)) {
+                res.writeHead(401, { "Content-Type": "application/json", ...SECURITY_HEADERS });
+                res.end(JSON.stringify({ ok: false, error: "Unauthorized" }));
+                return;
+            }
             const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
             const srv = buildServer();
             await srv.connect(transport);
             await transport.handleRequest(req, res);
         }
         else if (req.url === "/invoke" && req.method === "POST") {
+            if (!checkInvokeAuth(req)) {
+                res.writeHead(401, { "Content-Type": "application/json", ...SECURITY_HEADERS });
+                res.end(JSON.stringify({ ok: false, error: "Unauthorized" }));
+                return;
+            }
+            if (!checkInvokeRateLimit()) {
+                res.writeHead(429, { "Content-Type": "application/json", ...SECURITY_HEADERS });
+                res.end(JSON.stringify({ ok: false, error: "Rate limit exceeded. Max 60 requests per minute." }));
+                return;
+            }
             try {
                 const body = await readBody(req);
                 const { tool, args } = JSON.parse(body);
                 const result = await executeTool(tool, args);
-                res.writeHead(200, { "Content-Type": "application/json" });
+                res.writeHead(200, { "Content-Type": "application/json", ...SECURITY_HEADERS });
                 res.end(result);
             }
             catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                res.writeHead(500, { "Content-Type": "application/json" });
+                res.writeHead(500, { "Content-Type": "application/json", ...SECURITY_HEADERS });
                 res.end(JSON.stringify(flatErr(ERR.API_REQUEST_FAILED, msg)));
             }
         }
         else if (req.url === "/health") {
-            res.writeHead(200, { "Content-Type": "application/json" });
+            res.writeHead(200, { "Content-Type": "application/json", ...SECURITY_HEADERS });
             res.end(JSON.stringify({ ok: true, service: "mova-mcp", version: RUNNER_VERSION }));
         }
         else {
-            res.writeHead(404);
+            res.writeHead(404, SECURITY_HEADERS);
             res.end();
         }
     });

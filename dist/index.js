@@ -3,6 +3,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "node:http";
+import fs from "node:fs/promises";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, ListResourceTemplatesRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 import { movaPost, movaGet, movaPut, movaDelete, movaRunSteps, shortId, } from "./client.js";
 import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
@@ -132,6 +133,7 @@ const TOOLS = [
                 contract_id: { type: "string" },
                 run_id: { type: "string", description: "run_id from a previous run action" },
                 source_url: { type: "string", description: "HTTPS URL to the contract JSON" },
+                source_path: { type: "string", description: "Local filesystem path to a contract flow JSON. mova-mcp reads it locally and sends inline flow payload to the backend." },
                 title: { type: "string" },
                 version: { type: "string" },
                 execution_mode: { type: "string", description: "deterministic | bounded_variance | ai_assisted | human_gated" },
@@ -221,6 +223,14 @@ function redactSecrets(obj) {
             out[key] = "[REDACTED]";
     }
     return out;
+}
+async function loadInlineContractFlow(sourcePath) {
+    const raw = await fs.readFile(sourcePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Local contract file must be a JSON object.");
+    }
+    return parsed;
 }
 /** Normalize a caught error into a JSON string. */
 function normalizeError(e, requestId) {
@@ -455,17 +465,35 @@ async function executeTool(name, args) {
                     case "list":
                         return JSON.stringify(await movaGet(config, `/api/v1/contracts/my${q}`));
                     case "register":
-                        return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
-                            contract_id: args.contract_id,
-                            source_url: args.source_url,
-                            title: args.title,
-                            version: args.version,
-                            execution_mode: args.execution_mode,
-                            execution_type: args.execution_type ?? "agent",
-                            description: args.description,
-                            required_connectors: args.required_connectors ?? [],
-                            visibility: args.visibility ?? "private",
-                        }));
+                        {
+                            const sourcePath = args.source_path;
+                            const sourceUrl = args.source_url;
+                            if (!sourcePath && !sourceUrl) {
+                                return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "register requires either source_url or source_path", { provided_fields: Object.keys(args) }, false, requestId));
+                            }
+                            let inlineFlowJson;
+                            if (sourcePath) {
+                                try {
+                                    inlineFlowJson = await loadInlineContractFlow(sourcePath);
+                                }
+                                catch (error) {
+                                    return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`, { source_path: sourcePath }, false, requestId));
+                                }
+                            }
+                            return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
+                                contract_id: args.contract_id,
+                                source_url: sourceUrl,
+                                inline_flow_json: inlineFlowJson,
+                                source_path: sourcePath,
+                                title: args.title,
+                                version: args.version,
+                                execution_mode: args.execution_mode,
+                                execution_type: args.execution_type ?? "agent",
+                                description: args.description,
+                                required_connectors: args.required_connectors ?? [],
+                                visibility: args.visibility ?? "private",
+                            }));
+                        }
                     case "set_visibility":
                         return JSON.stringify(await movaPut(config, `/api/v1/contracts/${args.contract_id}/visibility`, { visibility: args.visibility }));
                     case "delete":

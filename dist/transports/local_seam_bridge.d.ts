@@ -1,9 +1,11 @@
-import { type FlatRunnerResult, type ValidatorRef } from "./types.js";
-import { type MovaConfig, shortId } from "./transports/local_seam_bridge.js";
-import { movaDelete, movaGet, movaPost, movaPut } from "./transports/remote_api.js";
-export type { MovaConfig };
-export { shortId, movaPost, movaGet, movaPut, movaDelete };
-export declare function movaGetDecisionPoint(cfg: MovaConfig, contractId: string): Promise<{
+import { type FlatRunnerResult } from "../types.js";
+export interface MovaConfig {
+    apiKey: string;
+    baseUrl: string;
+    llmKey: string;
+    llmModel: string;
+}
+type SeamGateResult = {
     ok: boolean;
     error?: string | null;
     human_gate?: {
@@ -15,8 +17,8 @@ export declare function movaGetDecisionPoint(cfg: MovaConfig, contractId: string
         } | null;
         decision_options?: unknown[];
     } | null;
-}>;
-export declare function movaSubmitDecision(cfg: MovaConfig, contractId: string, option: string, reason?: string): Promise<{
+};
+type SeamResolutionResult = {
     ok: boolean;
     error?: string | null;
     stored_resolution?: {
@@ -24,8 +26,8 @@ export declare function movaSubmitDecision(cfg: MovaConfig, contractId: string, 
         decision?: string | null;
         reason?: string | null;
     } | null;
-}>;
-export declare function movaResumeContract(cfg: MovaConfig, contractId: string): Promise<{
+};
+type SeamResumeResult = {
     ok: boolean;
     error?: string | null;
     run_state?: {
@@ -36,8 +38,8 @@ export declare function movaResumeContract(cfg: MovaConfig, contractId: string):
         linked_ai_output?: Record<string, unknown> | null;
         linked_human_resolution?: Record<string, unknown> | null;
     } | null;
-}>;
-export declare function movaGetTerminalOutcome(cfg: MovaConfig, contractId: string): Promise<{
+};
+type SeamTerminalResult = {
     ok: boolean;
     error?: string | null;
     terminal_outcome?: {
@@ -45,5 +47,12 @@ export declare function movaGetTerminalOutcome(cfg: MovaConfig, contractId: stri
         linked_ai_output?: Record<string, unknown> | null;
         linked_human_resolution?: Record<string, unknown> | null;
     } | null;
-}>;
-export declare function movaRunSteps(cfg: MovaConfig, contractId: string, validators: ValidatorRef[], initialInputs?: Record<string, unknown>): Promise<FlatRunnerResult>;
+};
+export declare function shortId(): string;
+export declare function isLocalSeamConfig(config: MovaConfig): boolean;
+export declare function movaGetDecisionPointLocal(runReference: string): Promise<SeamGateResult>;
+export declare function movaSubmitDecisionLocal(runReference: string, option: string, reason?: string): Promise<SeamResolutionResult>;
+export declare function movaResumeContractLocal(runReference: string): Promise<SeamResumeResult>;
+export declare function movaGetTerminalOutcomeLocal(runReference: string): Promise<SeamTerminalResult>;
+export declare function movaRunStepsLocal(initialInputs?: Record<string, unknown>): Promise<FlatRunnerResult>;
+export {};
