@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
+import path from "node:path";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -250,13 +251,47 @@ function redactSecrets(obj: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+async function resolveOutputSchema(schemaRef: string, flowDir: string): Promise<Record<string, unknown> | null> {
+  const candidates = [
+    path.join(flowDir, "_schemas", `${schemaRef}.json`),
+    path.join(flowDir, "..", "_data-schemas", `${schemaRef}.json`),
+    path.join(flowDir, "..", "..", "_data-schemas", `${schemaRef}.json`),
+    ...(process.env.MOVA_SCHEMA_PATH ? [path.join(process.env.MOVA_SCHEMA_PATH, `${schemaRef}.json`)] : []),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const raw = await fs.readFile(candidate, "utf8");
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
 async function loadInlineContractFlow(sourcePath: string): Promise<serde_json_like> {
   const raw = await fs.readFile(sourcePath, "utf8");
   const parsed = JSON.parse(raw) as unknown;
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("Local contract file must be a JSON object.");
   }
-  return parsed as serde_json_like;
+  const flow = parsed as serde_json_like;
+  const flowDir = path.dirname(sourcePath);
+
+  // Resolve output_schema string refs → inline the actual JSON Schema as output_schema_inline
+  if (Array.isArray(flow["steps"])) {
+    const steps = flow["steps"] as Record<string, unknown>[];
+    for (const step of steps) {
+      if (typeof step["output_schema"] === "string") {
+        const schema = await resolveOutputSchema(step["output_schema"] as string, flowDir);
+        if (schema) {
+          step["output_schema_inline"] = schema;
+        }
+      }
+    }
+  }
+
+  return flow;
 }
 
 type serde_json_like = Record<string, unknown>;

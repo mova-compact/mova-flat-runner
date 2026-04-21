@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
+import path from "node:path";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, ListResourceTemplatesRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 import { movaPost, movaGet, movaPut, movaDelete, movaRunSteps, shortId, } from "./client.js";
 import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
@@ -227,13 +228,45 @@ function redactSecrets(obj) {
     }
     return out;
 }
+async function resolveOutputSchema(schemaRef, flowDir) {
+    const candidates = [
+        path.join(flowDir, "_schemas", `${schemaRef}.json`),
+        path.join(flowDir, "..", "_data-schemas", `${schemaRef}.json`),
+        path.join(flowDir, "..", "..", "_data-schemas", `${schemaRef}.json`),
+        ...(process.env.MOVA_SCHEMA_PATH ? [path.join(process.env.MOVA_SCHEMA_PATH, `${schemaRef}.json`)] : []),
+    ];
+    for (const candidate of candidates) {
+        try {
+            const raw = await fs.readFile(candidate, "utf8");
+            return JSON.parse(raw);
+        }
+        catch {
+            // try next candidate
+        }
+    }
+    return null;
+}
 async function loadInlineContractFlow(sourcePath) {
     const raw = await fs.readFile(sourcePath, "utf8");
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new Error("Local contract file must be a JSON object.");
     }
-    return parsed;
+    const flow = parsed;
+    const flowDir = path.dirname(sourcePath);
+    // Resolve output_schema string refs → inline the actual JSON Schema as output_schema_inline
+    if (Array.isArray(flow["steps"])) {
+        const steps = flow["steps"];
+        for (const step of steps) {
+            if (typeof step["output_schema"] === "string") {
+                const schema = await resolveOutputSchema(step["output_schema"], flowDir);
+                if (schema) {
+                    step["output_schema_inline"] = schema;
+                }
+            }
+        }
+    }
+    return flow;
 }
 /** Normalize a caught error into a JSON string. */
 function normalizeError(e, requestId) {
