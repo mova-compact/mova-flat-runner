@@ -125,13 +125,16 @@ const TOOLS = [
     },
     {
         name: "mova_contract",
-        description: "Manage your own registered MOVA contracts: list, register, set visibility, delete, run, or check run status.",
+        description: "Manage your own registered MOVA contracts: list, register, set visibility, delete, run, check run status, report step completion, or approve/reject a human gate.",
         inputSchema: {
             type: "object",
             properties: {
-                action: { type: "string", enum: ["list", "register", "set_visibility", "delete", "run", "run_status"] },
+                action: { type: "string", enum: ["list", "register", "set_visibility", "delete", "run", "run_status", "step_complete", "gate_approve", "gate_reject"] },
                 contract_id: { type: "string" },
                 run_id: { type: "string", description: "run_id from a previous run action" },
+                step_id: { type: "string", description: "step_id being completed or approved/rejected (from flow.json step.id)" },
+                outcome: { type: "string", description: "Step outcome key matching flow.next map. Common values: ok | default | invalid | approved" },
+                output: { type: "object", description: "Structured output produced by the completed step (for step_complete)" },
                 source_url: { type: "string", description: "HTTPS URL to the contract JSON" },
                 source_path: { type: "string", description: "Local filesystem path to a contract flow JSON. mova-mcp reads it locally and sends inline flow payload to the backend." },
                 title: { type: "string" },
@@ -505,8 +508,29 @@ async function executeTool(name, args) {
                         }));
                     case "run_status":
                         return JSON.stringify(await movaGet(config, `/run/${args.run_id}/status`));
+                    case "step_complete": {
+                        if (!args.run_id || !args.step_id) {
+                            return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "step_complete requires run_id and step_id", {}, false, requestId));
+                        }
+                        return JSON.stringify(await movaPost(config, `/run/${args.run_id}/step/${args.step_id}/complete`, {
+                            outcome: args.outcome ?? "default",
+                            output: args.output ?? {},
+                        }));
+                    }
+                    case "gate_approve": {
+                        if (!args.run_id || !args.step_id) {
+                            return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "gate_approve requires run_id and step_id", {}, false, requestId));
+                        }
+                        return JSON.stringify(await movaPost(config, `/run/${args.run_id}/gate/${args.step_id}/approve`, {}));
+                    }
+                    case "gate_reject": {
+                        if (!args.run_id || !args.step_id) {
+                            return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "gate_reject requires run_id and step_id", {}, false, requestId));
+                        }
+                        return JSON.stringify(await movaPost(config, `/run/${args.run_id}/gate/${args.step_id}/reject`, {}));
+                    }
                     default:
-                        return JSON.stringify(flatErr(ERR.API_REQUEST_FAILED, `Unknown action "${args.action}". Use: list | register | set_visibility | delete | run | run_status`));
+                        return JSON.stringify(flatErr(ERR.API_REQUEST_FAILED, `Unknown action "${args.action}". Use: list | register | set_visibility | delete | run | run_status | step_complete | gate_approve | gate_reject`));
                 }
             }
             catch (e) {
