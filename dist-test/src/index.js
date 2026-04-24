@@ -3,12 +3,14 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "node:http";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, ListResourceTemplatesRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 import { movaPost, movaGet, movaPut, movaDelete, movaRunSteps, shortId, } from "./client.js";
 import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
-const RUNNER_VERSION = "2.0.7";
+const RUNNER_VERSION = "3.0.0";
 // ── Config helpers ────────────────────────────────────────────────────────────
 //
 // cfgBase — only MOVA_API_KEY required. Used for query/registry/decide/connector.
@@ -124,14 +126,18 @@ const TOOLS = [
     },
     {
         name: "mova_contract",
-        description: "Manage your own registered MOVA contracts: list, register, set visibility, delete, run, or check run status.",
+        description: "Manage your own registered MOVA contracts: list, register, set visibility, delete, run, check run status, report step completion, or approve/reject a human gate.",
         inputSchema: {
             type: "object",
             properties: {
-                action: { type: "string", enum: ["list", "register", "set_visibility", "delete", "run", "run_status"] },
+                action: { type: "string", enum: ["list", "register", "set_visibility", "delete", "run", "run_status", "step_complete", "gate_approve", "gate_reject"] },
                 contract_id: { type: "string" },
                 run_id: { type: "string", description: "run_id from a previous run action" },
+                step_id: { type: "string", description: "step_id being completed or approved/rejected (from flow.json step.id)" },
+                outcome: { type: "string", description: "Step outcome key matching flow.next map. Common values: ok | default | invalid | approved" },
+                output: { type: "object", description: "Structured output produced by the completed step (for step_complete)" },
                 source_url: { type: "string", description: "HTTPS URL to the contract JSON" },
+                source_path: { type: "string", description: "Local filesystem path to a contract flow JSON. mova-mcp reads it locally and sends inline flow payload to the backend." },
                 title: { type: "string" },
                 version: { type: "string" },
                 execution_mode: { type: "string", description: "deterministic | bounded_variance | ai_assisted | human_gated" },
@@ -221,6 +227,46 @@ function redactSecrets(obj) {
             out[key] = "[REDACTED]";
     }
     return out;
+}
+async function resolveOutputSchema(schemaRef, flowDir) {
+    const candidates = [
+        path.join(flowDir, "_schemas", `${schemaRef}.json`),
+        path.join(flowDir, "..", "_data-schemas", `${schemaRef}.json`),
+        path.join(flowDir, "..", "..", "_data-schemas", `${schemaRef}.json`),
+        ...(process.env.MOVA_SCHEMA_PATH ? [path.join(process.env.MOVA_SCHEMA_PATH, `${schemaRef}.json`)] : []),
+    ];
+    for (const candidate of candidates) {
+        try {
+            const raw = await fs.readFile(candidate, "utf8");
+            return JSON.parse(raw);
+        }
+        catch {
+            // try next candidate
+        }
+    }
+    return null;
+}
+async function loadInlineContractFlow(sourcePath) {
+    const raw = await fs.readFile(sourcePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Local contract file must be a JSON object.");
+    }
+    const flow = parsed;
+    const flowDir = path.dirname(sourcePath);
+    // Resolve output_schema string refs → inline the actual JSON Schema as output_schema_inline
+    if (Array.isArray(flow["steps"])) {
+        const steps = flow["steps"];
+        for (const step of steps) {
+            if (typeof step["output_schema"] === "string") {
+                const schema = await resolveOutputSchema(step["output_schema"], flowDir);
+                if (schema) {
+                    step["output_schema_inline"] = schema;
+                }
+            }
+        }
+    }
+    return flow;
 }
 /** Normalize a caught error into a JSON string. */
 function normalizeError(e, requestId) {
@@ -455,30 +501,92 @@ async function executeTool(name, args) {
                     case "list":
                         return JSON.stringify(await movaGet(config, `/api/v1/contracts/my${q}`));
                     case "register":
-                        return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
-                            contract_id: args.contract_id,
-                            source_url: args.source_url,
-                            title: args.title,
-                            version: args.version,
-                            execution_mode: args.execution_mode,
-                            execution_type: args.execution_type ?? "agent",
-                            description: args.description,
-                            required_connectors: args.required_connectors ?? [],
-                            visibility: args.visibility ?? "private",
-                        }));
+                        {
+                            const sourcePath = args.source_path;
+                            const sourceUrl = args.source_url;
+                            if (!sourcePath && !sourceUrl) {
+                                return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "register requires either source_url or source_path", { provided_fields: Object.keys(args) }, false, requestId));
+                            }
+                            let inlineFlowJson;
+                            if (sourcePath) {
+                                try {
+                                    inlineFlowJson = await loadInlineContractFlow(sourcePath);
+                                }
+                                catch (error) {
+                                    return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`, { source_path: sourcePath }, false, requestId));
+                                }
+                            }
+                            return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
+                                contract_id: args.contract_id,
+                                source_url: sourceUrl,
+                                inline_flow_json: inlineFlowJson,
+                                source_path: sourcePath,
+                                title: args.title,
+                                version: args.version,
+                                execution_mode: args.execution_mode,
+                                execution_type: args.execution_type ?? "agent",
+                                description: args.description,
+                                required_connectors: args.required_connectors ?? [],
+                                visibility: args.visibility ?? "private",
+                            }));
+                        }
                     case "set_visibility":
                         return JSON.stringify(await movaPut(config, `/api/v1/contracts/${args.contract_id}/visibility`, { visibility: args.visibility }));
                     case "delete":
                         return JSON.stringify(await movaDelete(config, `/api/v1/contracts/${args.contract_id}`));
-                    case "run":
+                    case "run": {
+                        const runSourcePath = args.source_path;
+                        if (runSourcePath) {
+                            if (!args.contract_id) {
+                                return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "contract_id is required when source_path is provided", { source_path: runSourcePath }, false, requestId));
+                            }
+                            let runInlineFlow;
+                            try {
+                                runInlineFlow = await loadInlineContractFlow(runSourcePath);
+                            }
+                            catch (error) {
+                                return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`, { source_path: runSourcePath }, false, requestId));
+                            }
+                            await movaPost(config, "/api/v1/contracts/register", {
+                                contract_id: args.contract_id,
+                                inline_flow_json: runInlineFlow,
+                                execution_type: "agent",
+                                visibility: "private",
+                            });
+                        }
                         return JSON.stringify(await movaPost(config, `/run/${args.contract_id}`, {
                             inputs: args.inputs ?? {},
                             connector_overrides: args.connector_overrides ?? {},
                         }));
+                    }
                     case "run_status":
                         return JSON.stringify(await movaGet(config, `/run/${args.run_id}/status`));
+                    case "step_complete": {
+                        if (!args.run_id || !args.step_id) {
+                            return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "step_complete requires run_id and step_id", {}, false, requestId));
+                        }
+                        return JSON.stringify(await movaPost(config, `/run/${args.run_id}/step/${args.step_id}/complete`, {
+                            outcome: args.outcome ?? "default",
+                            output: args.output ?? {},
+                        }));
+                    }
+                    case "gate_approve": {
+                        if (!args.run_id || !args.step_id) {
+                            return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "gate_approve requires run_id and step_id", {}, false, requestId));
+                        }
+                        const approveBody = {};
+                        if (args.outcome)
+                            approveBody.outcome = args.outcome;
+                        return JSON.stringify(await movaPost(config, `/run/${args.run_id}/gate/${args.step_id}/approve`, approveBody));
+                    }
+                    case "gate_reject": {
+                        if (!args.run_id || !args.step_id) {
+                            return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "gate_reject requires run_id and step_id", {}, false, requestId));
+                        }
+                        return JSON.stringify(await movaPost(config, `/run/${args.run_id}/gate/${args.step_id}/reject`, {}));
+                    }
                     default:
-                        return JSON.stringify(flatErr(ERR.API_REQUEST_FAILED, `Unknown action "${args.action}". Use: list | register | set_visibility | delete | run | run_status`));
+                        return JSON.stringify(flatErr(ERR.API_REQUEST_FAILED, `Unknown action "${args.action}". Use: list | register | set_visibility | delete | run | run_status | step_complete | gate_approve | gate_reject`));
                 }
             }
             catch (e) {

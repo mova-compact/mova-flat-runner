@@ -534,11 +534,31 @@ async function executeTool(name, args) {
                         return JSON.stringify(await movaPut(config, `/api/v1/contracts/${args.contract_id}/visibility`, { visibility: args.visibility }));
                     case "delete":
                         return JSON.stringify(await movaDelete(config, `/api/v1/contracts/${args.contract_id}`));
-                    case "run":
+                    case "run": {
+                        const runSourcePath = args.source_path;
+                        if (runSourcePath) {
+                            if (!args.contract_id) {
+                                return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "contract_id is required when source_path is provided", { source_path: runSourcePath }, false, requestId));
+                            }
+                            let runInlineFlow;
+                            try {
+                                runInlineFlow = await loadInlineContractFlow(runSourcePath);
+                            }
+                            catch (error) {
+                                return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`, { source_path: runSourcePath }, false, requestId));
+                            }
+                            await movaPost(config, "/api/v1/contracts/register", {
+                                contract_id: args.contract_id,
+                                inline_flow_json: runInlineFlow,
+                                execution_type: "agent",
+                                visibility: "private",
+                            });
+                        }
                         return JSON.stringify(await movaPost(config, `/run/${args.contract_id}`, {
                             inputs: args.inputs ?? {},
                             connector_overrides: args.connector_overrides ?? {},
                         }));
+                    }
                     case "run_status":
                         return JSON.stringify(await movaGet(config, `/run/${args.run_id}/status`));
                     case "step_complete": {
@@ -554,7 +574,10 @@ async function executeTool(name, args) {
                         if (!args.run_id || !args.step_id) {
                             return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "gate_approve requires run_id and step_id", {}, false, requestId));
                         }
-                        return JSON.stringify(await movaPost(config, `/run/${args.run_id}/gate/${args.step_id}/approve`, {}));
+                        const approveBody = {};
+                        if (args.outcome)
+                            approveBody.outcome = args.outcome;
+                        return JSON.stringify(await movaPost(config, `/run/${args.run_id}/gate/${args.step_id}/approve`, approveBody));
                     }
                     case "gate_reject": {
                         if (!args.run_id || !args.step_id) {
