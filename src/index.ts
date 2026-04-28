@@ -23,6 +23,7 @@ import { assertNotHumanGate } from "./security/gate_guard.js";
 import { assertNoSystemContractCalls } from "./security/system_contract_guard.js";
 import { assertNoInlineClassDefinition } from "./security/class_definition_guard.js";
 import { assertFlowGraphValid } from "./security/graph_guard.js";
+import { assertStepModesValid } from "./security/step_mode_guard.js";
 
 const RUNNER_VERSION = "3.0.0";
 
@@ -582,6 +583,11 @@ async function executeTool(name: string, args: Args): Promise<string> {
                 const graphViolation = assertFlowGraphValid(inlineFlowJson, requestId);
                 if (graphViolation) return JSON.stringify(graphViolation);
               }
+              // SECURITY (CFV-2): step execution_mode must agree with content fields.
+              if (inlineFlowJson) {
+                const modeViolation = assertStepModesValid(inlineFlowJson, requestId);
+                if (modeViolation) return JSON.stringify(modeViolation);
+              }
 
               return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:         args.contract_id,
@@ -639,6 +645,11 @@ async function executeTool(name: string, args: Args): Promise<string> {
               {
                 const graphViolation = assertFlowGraphValid(runInlineFlow, requestId);
                 if (graphViolation) return JSON.stringify(graphViolation);
+              }
+              // SECURITY (CFV-2): step execution_mode must agree with content fields.
+              {
+                const modeViolation = assertStepModesValid(runInlineFlow, requestId);
+                if (modeViolation) return JSON.stringify(modeViolation);
               }
               await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:      args.contract_id,
