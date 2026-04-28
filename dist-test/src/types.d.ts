@@ -25,6 +25,7 @@ export declare const ERR: {
     readonly AUDIT_UNAVAILABLE: "AUDIT_UNAVAILABLE";
     readonly API_TIMEOUT: "API_TIMEOUT";
     readonly MUST_USE_GATE_APPROVE: "MUST_USE_GATE_APPROVE";
+    readonly SYSTEM_CONTRACT_NOT_INVOKABLE: "SYSTEM_CONTRACT_NOT_INVOKABLE";
 };
 export type ErrCode = typeof ERR[keyof typeof ERR];
 export type FlatRunnerResult = {

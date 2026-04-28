@@ -31,6 +31,7 @@ export const ERR = {
   AUDIT_UNAVAILABLE:             "AUDIT_UNAVAILABLE",
   API_TIMEOUT:                   "API_TIMEOUT",
   MUST_USE_GATE_APPROVE:         "MUST_USE_GATE_APPROVE",
+  SYSTEM_CONTRACT_NOT_INVOKABLE: "SYSTEM_CONTRACT_NOT_INVOKABLE",
 } as const;
 
 export type ErrCode = typeof ERR[keyof typeof ERR];

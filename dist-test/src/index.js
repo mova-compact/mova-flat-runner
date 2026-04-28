@@ -11,6 +11,7 @@ import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
 import { assertNotHumanGate } from "./security/gate_guard.js";
+import { assertNoSystemContractCalls } from "./security/system_contract_guard.js";
 const RUNNER_VERSION = "3.0.0";
 // ── Config helpers ────────────────────────────────────────────────────────────
 //
@@ -517,6 +518,12 @@ async function executeTool(name, args) {
                                     return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`, { source_path: sourcePath }, false, requestId));
                                 }
                             }
+                            // SECURITY (CFV-11): refuse inline flows that CONTRACT_CALL system contracts.
+                            if (inlineFlowJson) {
+                                const violation = assertNoSystemContractCalls(inlineFlowJson, requestId);
+                                if (violation)
+                                    return JSON.stringify(violation);
+                            }
                             return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
                                 contract_id: args.contract_id,
                                 source_url: sourceUrl,
@@ -547,6 +554,12 @@ async function executeTool(name, args) {
                             }
                             catch (error) {
                                 return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`, { source_path: runSourcePath }, false, requestId));
+                            }
+                            // SECURITY (CFV-11): refuse inline flows that CONTRACT_CALL system contracts.
+                            {
+                                const violation = assertNoSystemContractCalls(runInlineFlow, requestId);
+                                if (violation)
+                                    return JSON.stringify(violation);
                             }
                             await movaPost(config, "/api/v1/contracts/register", {
                                 contract_id: args.contract_id,

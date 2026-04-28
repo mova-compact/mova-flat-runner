@@ -20,6 +20,7 @@ import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr, type ValidatorRef } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
 import { assertNotHumanGate } from "./security/gate_guard.js";
+import { assertNoSystemContractCalls } from "./security/system_contract_guard.js";
 
 const RUNNER_VERSION = "3.0.0";
 
@@ -564,6 +565,12 @@ async function executeTool(name: string, args: Args): Promise<string> {
                 }
               }
 
+              // SECURITY (CFV-11): refuse inline flows that CONTRACT_CALL system contracts.
+              if (inlineFlowJson) {
+                const violation = assertNoSystemContractCalls(inlineFlowJson, requestId);
+                if (violation) return JSON.stringify(violation);
+              }
+
               return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:         args.contract_id,
                 source_url:          sourceUrl,
@@ -605,6 +612,11 @@ async function executeTool(name: string, args: Args): Promise<string> {
                   false,
                   requestId,
                 ));
+              }
+              // SECURITY (CFV-11): refuse inline flows that CONTRACT_CALL system contracts.
+              {
+                const violation = assertNoSystemContractCalls(runInlineFlow, requestId);
+                if (violation) return JSON.stringify(violation);
               }
               await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:      args.contract_id,
