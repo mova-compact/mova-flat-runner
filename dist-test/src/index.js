@@ -15,6 +15,7 @@ import { assertNoSystemContractCalls } from "./security/system_contract_guard.js
 import { assertNoInlineClassDefinition } from "./security/class_definition_guard.js";
 import { assertFlowGraphValid } from "./security/graph_guard.js";
 import { assertStepModesValid } from "./security/step_mode_guard.js";
+import { assertNoUnknownFlowFields } from "./security/flow_schema_guard.js";
 const RUNNER_VERSION = "3.0.0";
 // ── Config helpers ────────────────────────────────────────────────────────────
 //
@@ -545,6 +546,12 @@ async function executeTool(name, args) {
                                 if (modeViolation)
                                     return JSON.stringify(modeViolation);
                             }
+                            // SECURITY (CFV-9): strict top-level flow schema; refuse unknown keys.
+                            if (inlineFlowJson) {
+                                const fieldViolation = assertNoUnknownFlowFields(inlineFlowJson, requestId);
+                                if (fieldViolation)
+                                    return JSON.stringify(fieldViolation);
+                            }
                             return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
                                 contract_id: args.contract_id,
                                 source_url: sourceUrl,
@@ -599,6 +606,12 @@ async function executeTool(name, args) {
                                 const modeViolation = assertStepModesValid(runInlineFlow, requestId);
                                 if (modeViolation)
                                     return JSON.stringify(modeViolation);
+                            }
+                            // SECURITY (CFV-9): strict top-level flow schema; refuse unknown keys.
+                            {
+                                const fieldViolation = assertNoUnknownFlowFields(runInlineFlow, requestId);
+                                if (fieldViolation)
+                                    return JSON.stringify(fieldViolation);
                             }
                             await movaPost(config, "/api/v1/contracts/register", {
                                 contract_id: args.contract_id,

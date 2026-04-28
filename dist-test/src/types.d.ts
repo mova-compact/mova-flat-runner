@@ -29,6 +29,7 @@ export declare const ERR: {
     readonly INLINE_CLASS_DEFINITION_FORBIDDEN: "INLINE_CLASS_DEFINITION_FORBIDDEN";
     readonly FLOW_GRAPH_INVALID: "FLOW_GRAPH_INVALID";
     readonly STEP_MODE_FIELD_MISMATCH: "STEP_MODE_FIELD_MISMATCH";
+    readonly UNKNOWN_FLOW_FIELD: "UNKNOWN_FLOW_FIELD";
 };
 export type ErrCode = typeof ERR[keyof typeof ERR];
 export type FlatRunnerResult = {

@@ -35,6 +35,7 @@ export const ERR = {
   INLINE_CLASS_DEFINITION_FORBIDDEN: "INLINE_CLASS_DEFINITION_FORBIDDEN",
   FLOW_GRAPH_INVALID:                "FLOW_GRAPH_INVALID",
   STEP_MODE_FIELD_MISMATCH:          "STEP_MODE_FIELD_MISMATCH",
+  UNKNOWN_FLOW_FIELD:                "UNKNOWN_FLOW_FIELD",
 } as const;
 
 export type ErrCode = typeof ERR[keyof typeof ERR];
