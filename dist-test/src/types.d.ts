@@ -27,6 +27,7 @@ export declare const ERR: {
     readonly MUST_USE_GATE_APPROVE: "MUST_USE_GATE_APPROVE";
     readonly SYSTEM_CONTRACT_NOT_INVOKABLE: "SYSTEM_CONTRACT_NOT_INVOKABLE";
     readonly INLINE_CLASS_DEFINITION_FORBIDDEN: "INLINE_CLASS_DEFINITION_FORBIDDEN";
+    readonly FLOW_GRAPH_INVALID: "FLOW_GRAPH_INVALID";
 };
 export type ErrCode = typeof ERR[keyof typeof ERR];
 export type FlatRunnerResult = {

@@ -17,6 +17,7 @@ export const ERR = {
     MUST_USE_GATE_APPROVE: "MUST_USE_GATE_APPROVE",
     SYSTEM_CONTRACT_NOT_INVOKABLE: "SYSTEM_CONTRACT_NOT_INVOKABLE",
     INLINE_CLASS_DEFINITION_FORBIDDEN: "INLINE_CLASS_DEFINITION_FORBIDDEN",
+    FLOW_GRAPH_INVALID: "FLOW_GRAPH_INVALID",
 };
 export function flatErr(error, message, details, retryable = false, requestId) {
     return {

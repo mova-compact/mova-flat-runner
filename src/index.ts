@@ -22,6 +22,7 @@ import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
 import { assertNotHumanGate } from "./security/gate_guard.js";
 import { assertNoSystemContractCalls } from "./security/system_contract_guard.js";
 import { assertNoInlineClassDefinition } from "./security/class_definition_guard.js";
+import { assertFlowGraphValid } from "./security/graph_guard.js";
 
 const RUNNER_VERSION = "3.0.0";
 
@@ -576,6 +577,11 @@ async function executeTool(name: string, args: Args): Promise<string> {
                 const cdViolation = assertNoInlineClassDefinition(inlineFlowJson, requestId);
                 if (cdViolation) return JSON.stringify(cdViolation);
               }
+              // SECURITY (CFV-1 + CFV-4): graph integrity — cycles, dangling next, self-loop, size cap.
+              if (inlineFlowJson) {
+                const graphViolation = assertFlowGraphValid(inlineFlowJson, requestId);
+                if (graphViolation) return JSON.stringify(graphViolation);
+              }
 
               return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:         args.contract_id,
@@ -628,6 +634,11 @@ async function executeTool(name: string, args: Args): Promise<string> {
               {
                 const cdViolation = assertNoInlineClassDefinition(runInlineFlow, requestId);
                 if (cdViolation) return JSON.stringify(cdViolation);
+              }
+              // SECURITY (CFV-1 + CFV-4): graph integrity — cycles, dangling next, self-loop, size cap.
+              {
+                const graphViolation = assertFlowGraphValid(runInlineFlow, requestId);
+                if (graphViolation) return JSON.stringify(graphViolation);
               }
               await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:      args.contract_id,
