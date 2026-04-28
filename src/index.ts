@@ -21,6 +21,7 @@ import { ERR, flatErr, type ValidatorRef } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
 import { assertNotHumanGate } from "./security/gate_guard.js";
 import { assertNoSystemContractCalls } from "./security/system_contract_guard.js";
+import { assertNoInlineClassDefinition } from "./security/class_definition_guard.js";
 
 const RUNNER_VERSION = "3.0.0";
 
@@ -570,6 +571,11 @@ async function executeTool(name: string, args: Args): Promise<string> {
                 const violation = assertNoSystemContractCalls(inlineFlowJson, requestId);
                 if (violation) return JSON.stringify(violation);
               }
+              // SECURITY (CFV-10): refuse inline flows that embed a class_definition.
+              if (inlineFlowJson) {
+                const cdViolation = assertNoInlineClassDefinition(inlineFlowJson, requestId);
+                if (cdViolation) return JSON.stringify(cdViolation);
+              }
 
               return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:         args.contract_id,
@@ -617,6 +623,11 @@ async function executeTool(name: string, args: Args): Promise<string> {
               {
                 const violation = assertNoSystemContractCalls(runInlineFlow, requestId);
                 if (violation) return JSON.stringify(violation);
+              }
+              // SECURITY (CFV-10): refuse inline flows that embed a class_definition.
+              {
+                const cdViolation = assertNoInlineClassDefinition(runInlineFlow, requestId);
+                if (cdViolation) return JSON.stringify(cdViolation);
               }
               await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:      args.contract_id,
