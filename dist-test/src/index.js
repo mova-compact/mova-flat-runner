@@ -10,6 +10,7 @@ import { movaPost, movaGet, movaPut, movaDelete, movaRunSteps, shortId, } from "
 import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
+import { assertNotHumanGate } from "./security/gate_guard.js";
 const RUNNER_VERSION = "3.0.0";
 // ── Config helpers ────────────────────────────────────────────────────────────
 //
@@ -565,6 +566,12 @@ async function executeTool(name, args) {
                         if (!args.run_id || !args.step_id) {
                             return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "step_complete requires run_id and step_id", {}, false, requestId));
                         }
+                        // SECURITY (CFV-3): HUMAN_GATE cannot be completed by generic step completion.
+                        // Human confirmation requires the dedicated gate path (gate_approve / gate_reject).
+                        // Guard runs BEFORE forwarding so run state is not advanced on rejection.
+                        const gateGuard = await assertNotHumanGate(config, args.run_id, args.step_id, requestId);
+                        if (gateGuard)
+                            return gateGuard;
                         return JSON.stringify(await movaPost(config, `/run/${args.run_id}/step/${args.step_id}/complete`, {
                             outcome: args.outcome ?? "default",
                             output: args.output ?? {},

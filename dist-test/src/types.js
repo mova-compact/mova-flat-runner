@@ -14,6 +14,7 @@ export const ERR = {
     LOCAL_INVALID_DECISION_OPTION: "LOCAL_INVALID_DECISION_OPTION",
     AUDIT_UNAVAILABLE: "AUDIT_UNAVAILABLE",
     API_TIMEOUT: "API_TIMEOUT",
+    MUST_USE_GATE_APPROVE: "MUST_USE_GATE_APPROVE",
 };
 export function flatErr(error, message, details, retryable = false, requestId) {
     return {

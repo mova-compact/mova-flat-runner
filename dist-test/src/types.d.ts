@@ -24,6 +24,7 @@ export declare const ERR: {
     readonly LOCAL_INVALID_DECISION_OPTION: "LOCAL_INVALID_DECISION_OPTION";
     readonly AUDIT_UNAVAILABLE: "AUDIT_UNAVAILABLE";
     readonly API_TIMEOUT: "API_TIMEOUT";
+    readonly MUST_USE_GATE_APPROVE: "MUST_USE_GATE_APPROVE";
 };
 export type ErrCode = typeof ERR[keyof typeof ERR];
 export type FlatRunnerResult = {
