@@ -218,6 +218,7 @@ test("VALIDATOR_REGISTRY — all expected ids registered", () => {
     "complaint.validate_inputs_v0",
     "compliance.validate_inputs_v0",
     "credit.validate_calcs_v0",
+    "content_flywheel.validate_intent_v0",
     "supply_chain.validate_inputs_v0",
     "churn.validate_inputs_v0",
     "contract_gen.validate_inputs_v0",

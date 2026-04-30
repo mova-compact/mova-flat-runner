@@ -67,6 +67,33 @@ function decideStep(title: string, decisionKind: string, question: string, optio
   return { step_id: "decide", step_type: "decision_point", title, config: { decision_kind: decisionKind, question, required_actor: { actor_type: "human" }, options, route_map: routeMap } };
 }
 
+const CONTENT_FLYWHEEL_LAYERS = [
+  "LAYER_01_DREAM_ENTRY",
+  "LAYER_02_BELIEF_BRIDGE",
+  "LAYER_03_REVENUE_PROCESS_METHOD",
+  "LAYER_04_MOVA_ECOSYSTEM_FORK",
+  "LAYER_05_PROOF_AND_TRUST",
+] as const;
+
+const CONTENT_FLYWHEEL_ROUTE_INTENTS = [
+  "BUSINESS_AUTOMATION_WITH_CONTRACTS",
+  "PRODUCT_CREATION_WITH_CONTRACT_CODING",
+  "BOTH",
+  "UNDECIDED",
+] as const;
+
+const CONTENT_FLYWHEEL_PUBLICATION_STATUSES = [
+  "APPROVED_FOR_PUBLICATION",
+  "APPROVED_WITH_EDITS",
+  "APPROVED_FOR_SCHEDULED_PUBLICATION",
+  "NEEDS_REWRITE",
+  "RISK_REVIEW_REQUIRED",
+  "OFF_STRATEGY",
+  "TOO_HYPE",
+  "TOO_TECHNICAL_FOR_LAYER",
+  "NO_GO",
+] as const;
+
 // ── Contract manifests ────────────────────────────────────────────────────────
 
 export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
@@ -476,6 +503,72 @@ export const CONTRACT_MANIFESTS: Record<string, ContractManifest> = {
     ],
     validators: [
       { step_id: "validate_inputs", title: "Validate Contract Gen Inputs", validator_id: "contract_gen.validate_inputs_v0" },
+    ],
+  },
+
+  content_flywheel: {
+    contract_type: "content_flywheel",
+    title: "MOVA Content Flywheel Foundation",
+    version: "1.0.0",
+    execution_mode: "human_gated",
+    template_id: "tpl.content.flywheel_foundation_v0",
+    policy_id: "policy.content.flywheel_publication_gate_v0",
+    short_id_prefix: "cfw",
+    dataspec: {
+      schema_version: "1.0",
+      inputs: [
+        { field: "business_context", type: "string", required: true, description: "Business, product, or ecosystem context for the content" },
+        { field: "target_audience", type: "string", required: true, description: "Primary audience for the content" },
+        { field: "flywheel_layer", type: "string", required: true, description: "Content flywheel layer", enum: [...CONTENT_FLYWHEEL_LAYERS] },
+        { field: "content_goal", type: "string", required: true, description: "Goal of the content asset" },
+        { field: "topic_seed", type: "string", required: true, description: "Seed topic or hook" },
+        { field: "platform", type: "string", required: true, description: "Publishing platform or channel" },
+        { field: "format", type: "string", required: true, description: "Post, article, email, lead magnet, or similar" },
+        { field: "route_intent", type: "string", required: false, description: "Expected next route for Layer 04", enum: [...CONTENT_FLYWHEEL_ROUTE_INTENTS] },
+      ],
+    },
+    decision_options: [
+      { option_id: "APPROVED_FOR_PUBLICATION", label: "Approve for publication" },
+      { option_id: "APPROVED_WITH_EDITS", label: "Approve with edits" },
+      { option_id: "APPROVED_FOR_SCHEDULED_PUBLICATION", label: "Approve for scheduled publication" },
+      { option_id: "NEEDS_REWRITE", label: "Needs rewrite" },
+      { option_id: "RISK_REVIEW_REQUIRED", label: "Send to risk review" },
+      { option_id: "OFF_STRATEGY", label: "Off strategy" },
+      { option_id: "TOO_HYPE", label: "Too hype" },
+      { option_id: "TOO_TECHNICAL_FOR_LAYER", label: "Too technical for layer" },
+      { option_id: "NO_GO", label: "No go" },
+    ],
+    steps: [
+      aiStep(
+        "analyze",
+        "Content Flywheel Draft Assembly",
+        "verify",
+        [
+          "You are the MOVA content flywheel editor.",
+          "Turn the provided inputs into a single structured content draft aligned to the selected layer.",
+          "Return ONLY a JSON object with: draft_id, brief_id, idea_id, flywheel_layer, title, body, platform, format, cta, risk_notes (array of strings), self_review ({ layer_match, no_false_income_promise, human_review_required, notes }), editor_notes, status.",
+          "Keep the language honest and layer-appropriate.",
+          "Do not promise guaranteed income.",
+          "Do not imply autonomous publication, a new runner, or live external action.",
+          "Keep Layer 01 dream-led, Layer 02 revenue-process-led, Layer 03 method-led, Layer 04 route-led, and Layer 05 proof-led.",
+          "The publication gate is human-controlled.",
+        ].join(" "),
+      ),
+      verifyStep("Layer Compliance & Risk Snapshot"),
+      decideStep("Publication Review Gate", "content_publication_review", "Select the publication status for this content draft:", [
+        { option_id: "APPROVED_FOR_PUBLICATION", label: "Approve for publication" },
+        { option_id: "APPROVED_WITH_EDITS", label: "Approve with edits" },
+        { option_id: "APPROVED_FOR_SCHEDULED_PUBLICATION", label: "Approve for scheduled publication" },
+        { option_id: "NEEDS_REWRITE", label: "Needs rewrite" },
+        { option_id: "RISK_REVIEW_REQUIRED", label: "Send to risk review" },
+        { option_id: "OFF_STRATEGY", label: "Off strategy" },
+        { option_id: "TOO_HYPE", label: "Too hype" },
+        { option_id: "TOO_TECHNICAL_FOR_LAYER", label: "Too technical for layer" },
+        { option_id: "NO_GO", label: "No go" },
+      ]),
+    ],
+    validators: [
+      { step_id: "validate_intent", title: "Validate Content Flywheel Intent", validator_id: "content_flywheel.validate_intent_v0" },
     ],
   },
 
