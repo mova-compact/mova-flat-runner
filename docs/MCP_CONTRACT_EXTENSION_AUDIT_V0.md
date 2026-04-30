@@ -135,3 +135,8 @@ Create a narrowly scoped change set:
 
 `REVERT_AND_REIMPLEMENT_AS_REGISTERED_PACK`
 
+## Remediation Note
+
+Remediation has started in follow-up commit path:
+- built-in `content_flywheel` wiring removed from MCP core
+- registered-pack runbook and registration-path guard smoke added

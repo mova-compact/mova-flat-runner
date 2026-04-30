@@ -1,71 +1,41 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 import { CONTRACT_MANIFESTS } from "../../src/schemas.js";
-import { validateDataSpec, validateFlowShape } from "../../src/validation/dataspec.js";
 import { VALIDATOR_REGISTRY } from "../../src/validators/registry.js";
+import { assertNoSystemContractCalls } from "../../src/security/system_contract_guard.js";
+import { assertNoInlineClassDefinition } from "../../src/security/class_definition_guard.js";
+import { assertFlowGraphValid } from "../../src/security/graph_guard.js";
+import { assertStepModesValid } from "../../src/security/step_mode_guard.js";
+import { assertNoUnknownFlowFields } from "../../src/security/flow_schema_guard.js";
 
-const manifest = CONTRACT_MANIFESTS.content_flywheel;
+function fixturePath() {
+  return path.resolve("tests", "fixtures", "content_flywheel_registered_pack", "flow.json");
+}
 
-test("content_flywheel manifest is registered", () => {
-  assert.ok(manifest, "content_flywheel manifest missing");
-  assert.equal(manifest.contract_type, "content_flywheel");
-  assert.equal(manifest.execution_mode, "human_gated");
+async function loadFixtureFlow() {
+  const raw = await fs.readFile(fixturePath(), "utf8");
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+test("content_flywheel is not a built-in manifest in MCP core", () => {
+  assert.equal("content_flywheel" in CONTRACT_MANIFESTS, false);
 });
 
-test("content_flywheel manifest uses the supported analyze->verify->decide shape", () => {
-  assert.equal(validateFlowShape(manifest.steps as unknown[]).ok, true);
+test("content_flywheel validator is not in the core validator registry", () => {
+  assert.equal(VALIDATOR_REGISTRY.has("content_flywheel.validate_intent_v0"), false);
 });
 
-test("content_flywheel manifest exposes the publication approval boundary", () => {
-  const options = manifest.decision_options.map((option) => option.option_id);
-  assert.deepEqual(options.slice(0, 3), [
-    "APPROVED_FOR_PUBLICATION",
-    "APPROVED_WITH_EDITS",
-    "APPROVED_FOR_SCHEDULED_PUBLICATION",
-  ]);
-  for (const blocked of [
-    "NEEDS_REWRITE",
-    "RISK_REVIEW_REQUIRED",
-    "OFF_STRATEGY",
-    "TOO_HYPE",
-    "TOO_TECHNICAL_FOR_LAYER",
-    "NO_GO",
-  ]) {
-    assert.ok(options.includes(blocked), `missing blocked publication status ${blocked}`);
-  }
-});
+test("external content_flywheel fixture passes registration-path guards", async () => {
+  const flow = await loadFixtureFlow();
+  const req = "req-cfw-pack-fixture";
 
-test("content_flywheel DataSpec accepts a representative integration request", () => {
-  const result = validateDataSpec(
-    {
-      business_context: "MOVA content system for compact contract-pack onboarding",
-      target_audience: "MOVA operators and product-minded builders",
-      flywheel_layer: "LAYER_03_REVENUE_PROCESS_METHOD",
-      content_goal: "Create a draft that turns a Contract Candidate into the next qualified action",
-      topic_seed: "One process. One leak. One AI leverage point.",
-      platform: "site article",
-      format: "article",
-      route_intent: "PRODUCT_CREATION_WITH_CONTRACT_CODING",
-    },
-    manifest.dataspec.inputs,
-  );
-  assert.equal(result.ok, true);
-  assert.equal(result.errors.length, 0);
-});
-
-test("content_flywheel validator is registered and enriches analysis", () => {
-  const fn = VALIDATOR_REGISTRY.get("content_flywheel.validate_intent_v0");
-  assert.ok(fn, "content_flywheel validator missing");
-  const result = fn!({
-    flywheel_layer: "LAYER_04_MOVA_ECOSYSTEM_FORK",
-    route_intent: "BUSINESS_AUTOMATION_WITH_CONTRACTS",
-  });
-  assert.equal(result.ok, true);
-  assert.equal(result.value.flywheel_layer_known, true);
-  assert.equal(result.value.flywheel_layer_index, 4);
-  assert.equal(result.value.route_intent_known, true);
-  assert.equal(result.value.human_review_required, true);
-  assert.equal(result.value.publication_allowed, false);
+  assert.equal(assertNoSystemContractCalls(flow, req), null);
+  assert.equal(assertNoInlineClassDefinition(flow, req), null);
+  assert.equal(assertFlowGraphValid(flow, req), null);
+  assert.equal(assertStepModesValid(flow, req), null);
+  assert.equal(assertNoUnknownFlowFields(flow, req), null);
 });
 

@@ -13,7 +13,6 @@ import { amlValidators        } from "./aml.js";
 import { complaintValidators  } from "./complaint.js";
 import { complianceValidators } from "./compliance.js";
 import { creditValidators     } from "./credit.js";
-import { contentFlywheelValidators } from "./content_flywheel.js";
 import { supplyChainValidators} from "./supply_chain.js";
 import { churnValidators      } from "./churn.js";
 import { contractGenValidators} from "./contract_gen.js";
@@ -28,7 +27,6 @@ const all: ValidatorEntry[] = [
   ...complaintValidators,
   ...complianceValidators,
   ...creditValidators,
-  ...contentFlywheelValidators,
   ...supplyChainValidators,
   ...churnValidators,
   ...contractGenValidators,
