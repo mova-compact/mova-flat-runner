@@ -30,6 +30,7 @@ export declare const ERR: {
     readonly FLOW_GRAPH_INVALID: "FLOW_GRAPH_INVALID";
     readonly STEP_MODE_FIELD_MISMATCH: "STEP_MODE_FIELD_MISMATCH";
     readonly UNKNOWN_FLOW_FIELD: "UNKNOWN_FLOW_FIELD";
+    readonly NON_DETERMINISTIC_OUTPUT: "NON_DETERMINISTIC_OUTPUT";
 };
 export type ErrCode = typeof ERR[keyof typeof ERR];
 export type FlatRunnerResult = {

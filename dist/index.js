@@ -10,6 +10,12 @@ import { movaPost, movaGet, movaPut, movaDelete, movaRunSteps, shortId, } from "
 import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
+import { assertNotHumanGate } from "./security/gate_guard.js";
+import { assertNoSystemContractCalls } from "./security/system_contract_guard.js";
+import { assertNoInlineClassDefinition } from "./security/class_definition_guard.js";
+import { assertFlowGraphValid } from "./security/graph_guard.js";
+import { assertStepModesValid } from "./security/step_mode_guard.js";
+import { assertNoUnknownFlowFields } from "./security/flow_schema_guard.js";
 const RUNNER_VERSION = "3.0.0";
 // ── Config helpers ────────────────────────────────────────────────────────────
 //
@@ -516,6 +522,36 @@ async function executeTool(name, args) {
                                     return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`, { source_path: sourcePath }, false, requestId));
                                 }
                             }
+                            // SECURITY (CFV-11): refuse inline flows that CONTRACT_CALL system contracts.
+                            if (inlineFlowJson) {
+                                const violation = assertNoSystemContractCalls(inlineFlowJson, requestId);
+                                if (violation)
+                                    return JSON.stringify(violation);
+                            }
+                            // SECURITY (CFV-10): refuse inline flows that embed a class_definition.
+                            if (inlineFlowJson) {
+                                const cdViolation = assertNoInlineClassDefinition(inlineFlowJson, requestId);
+                                if (cdViolation)
+                                    return JSON.stringify(cdViolation);
+                            }
+                            // SECURITY (CFV-1 + CFV-4): graph integrity — cycles, dangling next, self-loop, size cap.
+                            if (inlineFlowJson) {
+                                const graphViolation = assertFlowGraphValid(inlineFlowJson, requestId);
+                                if (graphViolation)
+                                    return JSON.stringify(graphViolation);
+                            }
+                            // SECURITY (CFV-2): step execution_mode must agree with content fields.
+                            if (inlineFlowJson) {
+                                const modeViolation = assertStepModesValid(inlineFlowJson, requestId);
+                                if (modeViolation)
+                                    return JSON.stringify(modeViolation);
+                            }
+                            // SECURITY (CFV-9): strict top-level flow schema; refuse unknown keys.
+                            if (inlineFlowJson) {
+                                const fieldViolation = assertNoUnknownFlowFields(inlineFlowJson, requestId);
+                                if (fieldViolation)
+                                    return JSON.stringify(fieldViolation);
+                            }
                             return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
                                 contract_id: args.contract_id,
                                 source_url: sourceUrl,
@@ -547,6 +583,36 @@ async function executeTool(name, args) {
                             catch (error) {
                                 return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`, { source_path: runSourcePath }, false, requestId));
                             }
+                            // SECURITY (CFV-11): refuse inline flows that CONTRACT_CALL system contracts.
+                            {
+                                const violation = assertNoSystemContractCalls(runInlineFlow, requestId);
+                                if (violation)
+                                    return JSON.stringify(violation);
+                            }
+                            // SECURITY (CFV-10): refuse inline flows that embed a class_definition.
+                            {
+                                const cdViolation = assertNoInlineClassDefinition(runInlineFlow, requestId);
+                                if (cdViolation)
+                                    return JSON.stringify(cdViolation);
+                            }
+                            // SECURITY (CFV-1 + CFV-4): graph integrity — cycles, dangling next, self-loop, size cap.
+                            {
+                                const graphViolation = assertFlowGraphValid(runInlineFlow, requestId);
+                                if (graphViolation)
+                                    return JSON.stringify(graphViolation);
+                            }
+                            // SECURITY (CFV-2): step execution_mode must agree with content fields.
+                            {
+                                const modeViolation = assertStepModesValid(runInlineFlow, requestId);
+                                if (modeViolation)
+                                    return JSON.stringify(modeViolation);
+                            }
+                            // SECURITY (CFV-9): strict top-level flow schema; refuse unknown keys.
+                            {
+                                const fieldViolation = assertNoUnknownFlowFields(runInlineFlow, requestId);
+                                if (fieldViolation)
+                                    return JSON.stringify(fieldViolation);
+                            }
                             await movaPost(config, "/api/v1/contracts/register", {
                                 contract_id: args.contract_id,
                                 inline_flow_json: runInlineFlow,
@@ -565,6 +631,12 @@ async function executeTool(name, args) {
                         if (!args.run_id || !args.step_id) {
                             return JSON.stringify(flatErr(ERR.LOCAL_VALIDATION_FAILED, "step_complete requires run_id and step_id", {}, false, requestId));
                         }
+                        // SECURITY (CFV-3): HUMAN_GATE cannot be completed by generic step completion.
+                        // Human confirmation requires the dedicated gate path (gate_approve / gate_reject).
+                        // Guard runs BEFORE forwarding so run state is not advanced on rejection.
+                        const gateGuard = await assertNotHumanGate(config, args.run_id, args.step_id, requestId);
+                        if (gateGuard)
+                            return gateGuard;
                         return JSON.stringify(await movaPost(config, `/run/${args.run_id}/step/${args.step_id}/complete`, {
                             outcome: args.outcome ?? "default",
                             output: args.output ?? {},
