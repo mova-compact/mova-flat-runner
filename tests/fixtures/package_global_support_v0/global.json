@@ -1,0 +1,69 @@
+{
+  "schema_id": "package.global_v0",
+  "global_id": "content_flywheel_pipeline_global_v0",
+  "version": "0.1.0",
+  "scope": "contract_package",
+  "extends": [],
+  "semantic_roles": [
+    {
+      "id": "manifest",
+      "role": "package_manifest",
+      "authority": "documentation",
+      "maturity": "canonical",
+      "applies_to": [
+        "manifest.json"
+      ],
+      "allowed_use": [
+        "discover package metadata",
+        "load package references"
+      ],
+      "forbidden_use": [
+        "execute runtime",
+        "choose flow transitions"
+      ],
+      "notes": "Package entrypoint and references only."
+    },
+    {
+      "id": "flow",
+      "role": "contract_flow",
+      "authority": "structural",
+      "maturity": "canonical",
+      "applies_to": [
+        "flow.json"
+      ],
+      "allowed_use": [
+        "inspect step topology",
+        "load flow structure"
+      ],
+      "forbidden_use": [
+        "override step execution",
+        "replace runtime bindings"
+      ],
+      "notes": "Flow remains authoritative for execution topology."
+    },
+    {
+      "id": "readme",
+      "role": "human_projection",
+      "authority": "informational",
+      "maturity": "advisory",
+      "applies_to": [
+        "README.md"
+      ],
+      "allowed_use": [
+        "help readers orient"
+      ],
+      "forbidden_use": [
+        "authoritative execution decisions"
+      ],
+      "notes": "Reader guidance only."
+    }
+  ],
+  "non_authority_rules": [
+    "global does not execute",
+    "global does not override flow.json",
+    "global does not override classification_results.json",
+    "global does not override runtime_binding_set.json",
+    "global does not grant AI runtime authority",
+    "global does not change transitions, gates, terminal outcomes, permissions, or execution mode"
+  ]
+}

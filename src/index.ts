@@ -3,8 +3,6 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "node:http";
-import fs from "node:fs/promises";
-import path from "node:path";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -19,6 +17,7 @@ import {
 import { CONTRACT_MANIFESTS, ENVELOPE_SCHEMA } from "./schemas.js";
 import { ERR, flatErr, type ValidatorRef } from "./types.js";
 import { validateDataSpec, validateFlowShape } from "./validation/dataspec.js";
+import { loadContractRegistrationSource } from "./package_support.js";
 import { assertNotHumanGate } from "./security/gate_guard.js";
 import { assertNoSystemContractCalls } from "./security/system_contract_guard.js";
 import { assertNoInlineClassDefinition } from "./security/class_definition_guard.js";
@@ -159,8 +158,8 @@ const TOOLS = [
         step_id:             { type: "string", description: "step_id being completed or approved/rejected (from flow.json step.id)" },
         outcome:             { type: "string", description: "Step outcome key matching flow.next map. Common values: ok | default | invalid | approved" },
         output:              { type: "object", description: "Structured output produced by the completed step (for step_complete)" },
-        source_url:          { type: "string", description: "HTTPS URL to the contract JSON" },
-        source_path:         { type: "string", description: "Local filesystem path to a contract flow JSON. mova-mcp reads it locally and sends inline flow payload to the backend." },
+        source_url:          { type: "string", description: "HTTPS URL to the contract JSON or package manifest" },
+        source_path:         { type: "string", description: "Local filesystem path to a contract flow JSON or contract package manifest root/file. mova-mcp reads it locally and sends inline flow payload to the backend." },
         title:               { type: "string" },
         version:             { type: "string" },
         execution_mode:      { type: "string", description: "deterministic | bounded_variance | ai_assisted | human_gated" },
@@ -256,51 +255,6 @@ function redactSecrets(obj: Record<string, unknown>): Record<string, unknown> {
   }
   return out;
 }
-
-async function resolveOutputSchema(schemaRef: string, flowDir: string): Promise<Record<string, unknown> | null> {
-  const candidates = [
-    path.join(flowDir, "_schemas", `${schemaRef}.json`),
-    path.join(flowDir, "..", "_data-schemas", `${schemaRef}.json`),
-    path.join(flowDir, "..", "..", "_data-schemas", `${schemaRef}.json`),
-    ...(process.env.MOVA_SCHEMA_PATH ? [path.join(process.env.MOVA_SCHEMA_PATH, `${schemaRef}.json`)] : []),
-  ];
-  for (const candidate of candidates) {
-    try {
-      const raw = await fs.readFile(candidate, "utf8");
-      return JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      // try next candidate
-    }
-  }
-  return null;
-}
-
-async function loadInlineContractFlow(sourcePath: string): Promise<serde_json_like> {
-  const raw = await fs.readFile(sourcePath, "utf8");
-  const parsed = JSON.parse(raw) as unknown;
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Local contract file must be a JSON object.");
-  }
-  const flow = parsed as serde_json_like;
-  const flowDir = path.dirname(sourcePath);
-
-  // Resolve output_schema string refs → inline the actual JSON Schema as output_schema_inline
-  if (Array.isArray(flow["steps"])) {
-    const steps = flow["steps"] as Record<string, unknown>[];
-    for (const step of steps) {
-      if (typeof step["output_schema"] === "string") {
-        const schema = await resolveOutputSchema(step["output_schema"] as string, flowDir);
-        if (schema) {
-          step["output_schema_inline"] = schema;
-        }
-      }
-    }
-  }
-
-  return flow;
-}
-
-type serde_json_like = Record<string, unknown>;
 
 /** Normalize a caught error into a JSON string. */
 function normalizeError(e: unknown, requestId?: string): string {
@@ -554,48 +508,39 @@ async function executeTool(name: string, args: Args): Promise<string> {
                 ));
               }
 
-              let inlineFlowJson: serde_json_like | undefined;
-              if (sourcePath) {
-                try {
-                  inlineFlowJson = await loadInlineContractFlow(sourcePath);
-                } catch (error) {
-                  return JSON.stringify(flatErr(
-                    ERR.LOCAL_VALIDATION_FAILED,
-                    `Failed to read source_path: ${error instanceof Error ? error.message : String(error)}`,
-                    { source_path: sourcePath },
-                    false,
-                    requestId,
-                  ));
-                }
+              let registrationSource: Awaited<ReturnType<typeof loadContractRegistrationSource>>;
+              try {
+                registrationSource = await loadContractRegistrationSource(sourcePath, sourceUrl);
+              } catch (error) {
+                const sourceMeta = sourcePath ? { source_path: sourcePath } : { source_url: sourceUrl };
+                return JSON.stringify(flatErr(
+                  ERR.LOCAL_VALIDATION_FAILED,
+                  `Failed to read contract source: ${error instanceof Error ? error.message : String(error)}`,
+                  sourceMeta,
+                  false,
+                  requestId,
+                ));
               }
+
+              const inlineFlowJson = registrationSource.flow_json;
 
               // SECURITY (CFV-11): refuse inline flows that CONTRACT_CALL system contracts.
-              if (inlineFlowJson) {
-                const violation = assertNoSystemContractCalls(inlineFlowJson, requestId);
-                if (violation) return JSON.stringify(violation);
-              }
+              const violation = assertNoSystemContractCalls(inlineFlowJson, requestId);
+              if (violation) return JSON.stringify(violation);
               // SECURITY (CFV-10): refuse inline flows that embed a class_definition.
-              if (inlineFlowJson) {
-                const cdViolation = assertNoInlineClassDefinition(inlineFlowJson, requestId);
-                if (cdViolation) return JSON.stringify(cdViolation);
-              }
+              const cdViolation = assertNoInlineClassDefinition(inlineFlowJson, requestId);
+              if (cdViolation) return JSON.stringify(cdViolation);
               // SECURITY (CFV-1 + CFV-4): graph integrity — cycles, dangling next, self-loop, size cap.
-              if (inlineFlowJson) {
-                const graphViolation = assertFlowGraphValid(inlineFlowJson, requestId);
-                if (graphViolation) return JSON.stringify(graphViolation);
-              }
+              const graphViolation = assertFlowGraphValid(inlineFlowJson, requestId);
+              if (graphViolation) return JSON.stringify(graphViolation);
               // SECURITY (CFV-2): step execution_mode must agree with content fields.
-              if (inlineFlowJson) {
-                const modeViolation = assertStepModesValid(inlineFlowJson, requestId);
-                if (modeViolation) return JSON.stringify(modeViolation);
-              }
+              const modeViolation = assertStepModesValid(inlineFlowJson, requestId);
+              if (modeViolation) return JSON.stringify(modeViolation);
               // SECURITY (CFV-9): strict top-level flow schema; refuse unknown keys.
-              if (inlineFlowJson) {
-                const fieldViolation = assertNoUnknownFlowFields(inlineFlowJson, requestId);
-                if (fieldViolation) return JSON.stringify(fieldViolation);
-              }
+              const fieldViolation = assertNoUnknownFlowFields(inlineFlowJson, requestId);
+              if (fieldViolation) return JSON.stringify(fieldViolation);
 
-              return JSON.stringify(await movaPost(config, "/api/v1/contracts/register", {
+              const registerResponse = await movaPost(config, "/api/v1/contracts/register", {
                 contract_id:         args.contract_id,
                 source_url:          sourceUrl,
                 inline_flow_json:    inlineFlowJson,
@@ -607,7 +552,17 @@ async function executeTool(name: string, args: Args): Promise<string> {
                 description:         args.description,
                 required_connectors: args.required_connectors ?? [],
                 visibility:          args.visibility ?? "private",
-              }));
+              });
+              if (registrationSource.kind === "package_manifest") {
+                return JSON.stringify({
+                  ...(registerResponse && typeof registerResponse === "object" && !Array.isArray(registerResponse)
+                    ? registerResponse as Record<string, unknown>
+                    : { backend_response: registerResponse }),
+                  package_manifest: registrationSource.package_manifest,
+                  package_global: registrationSource.package_global,
+                });
+              }
+              return JSON.stringify(registerResponse);
             }
           case "set_visibility":
             return JSON.stringify(await movaPut(config, `/api/v1/contracts/${args.contract_id}/visibility`, { visibility: args.visibility }));
@@ -625,9 +580,9 @@ async function executeTool(name: string, args: Args): Promise<string> {
                   requestId,
                 ));
               }
-              let runInlineFlow: serde_json_like;
+              let runRegistrationSource: Awaited<ReturnType<typeof loadContractRegistrationSource>>;
               try {
-                runInlineFlow = await loadInlineContractFlow(runSourcePath);
+                runRegistrationSource = await loadContractRegistrationSource(runSourcePath);
               } catch (error) {
                 return JSON.stringify(flatErr(
                   ERR.LOCAL_VALIDATION_FAILED,
@@ -637,6 +592,7 @@ async function executeTool(name: string, args: Args): Promise<string> {
                   requestId,
                 ));
               }
+              const runInlineFlow = runRegistrationSource.flow_json;
               // SECURITY (CFV-11): refuse inline flows that CONTRACT_CALL system contracts.
               {
                 const violation = assertNoSystemContractCalls(runInlineFlow, requestId);

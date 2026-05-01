@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "description": "Minimal external pack flow fixture for registration-path guard smoke.",
+  "entry": "analyze",
+  "steps": [
+    {
+      "id": "analyze",
+      "execution_mode": "AI_ATOMIC",
+      "model": "openai/gpt-4o-mini",
+      "next": {
+        "default": {
+          "step": "verify"
+        }
+      }
+    },
+    {
+      "id": "verify",
+      "execution_mode": "DETERMINISTIC",
+      "next": {
+        "default": {
+          "step": "decide"
+        }
+      }
+    },
+    {
+      "id": "decide",
+      "execution_mode": "HUMAN_GATE",
+      "decision_options": [
+        {
+          "option_id": "APPROVED_FOR_PUBLICATION",
+          "label": "Approve"
+        },
+        {
+          "option_id": "NEEDS_REWRITE",
+          "label": "Rewrite"
+        }
+      ],
+      "next": {
+        "approved": {
+          "terminal": "published"
+        },
+        "default": {
+          "terminal": "stopped"
+        }
+      }
+    }
+  ]
+}

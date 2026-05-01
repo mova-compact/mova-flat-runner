@@ -1,0 +1,25 @@
+{
+  "schema_id": "package.contract_package_manifest_v0",
+  "package_id": "content_flywheel_pipeline_v0",
+  "version": "0.1.0",
+  "global_ref": "global.json",
+  "flow_ref": "flow.json",
+  "classification_policy_ref": "classification_policy.json",
+  "classification_result_set_ref": "classification_results.json",
+  "classification_result_refs": [
+    "classification://analyze",
+    "classification://verify",
+    "classification://decide"
+  ],
+  "runtime_binding_set_ref": "runtime_binding_set.json",
+  "model_refs": [
+    "models/input_model_v0.json",
+    "models/verification_model_v0.json"
+  ],
+  "fixture_refs": [
+    "fixtures/"
+  ],
+  "package_invariants": [
+    "global is non-authoritative semantic context only"
+  ]
+}
