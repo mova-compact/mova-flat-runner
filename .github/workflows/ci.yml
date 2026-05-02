@@ -37,6 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -56,17 +59,11 @@ jobs:
 
       - name: Publish if version changed
         run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "NPM_TOKEN secret not set — skipping publish"
-            exit 0
-          fi
           PUBLISHED=$(npm view mova-mcp version 2>/dev/null || echo "0.0.0")
           LOCAL=$(node -p "require('./package.json').version")
           if [ "$LOCAL" != "$PUBLISHED" ]; then
             echo "Publishing $LOCAL (was $PUBLISHED)"
-            npm publish
+            npm publish --provenance --access public
           else
             echo "Version $LOCAL already published — skipping"
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
