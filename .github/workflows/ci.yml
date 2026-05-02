@@ -61,7 +61,7 @@ jobs:
 
       - name: Publish if version changed
         run: |
-          PUBLISHED=$(npm view @mova-compact/mova-flat-runner version 2>/dev/null || echo "0.0.0")
+          PUBLISHED=$(npm view @leryk1981/mova-flat-runner version 2>/dev/null || echo "0.0.0")
           LOCAL=$(node -p "require('./package.json').version")
           if [ "$LOCAL" != "$PUBLISHED" ]; then
             echo "Publishing $LOCAL (was $PUBLISHED)"
