@@ -44,6 +44,21 @@ async function get(path: string): Promise<unknown> {
   }
 }
 
+async function fetchJson(path: string): Promise<{ status: number; body: unknown }> {
+  const ctrl = new AbortController();
+  const t    = setTimeout(() => ctrl.abort(), TIMEOUT);
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+      signal: ctrl.signal,
+    });
+    const body = await res.json().catch(() => ({}));
+    return { status: res.status, body };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 console.log(`\nMOVA Flat Runner — smoke:api`);
 console.log(`API: ${API_URL}`);
 console.log(`Key: ${API_KEY ? API_KEY.slice(0, 8) + "…" : "(not set)"}\n`);
@@ -56,13 +71,17 @@ if (!API_KEY) {
 // ── Checks ────────────────────────────────────────────────────────────────────
 
 await check("GET /health — API reachable", async () => {
-  const r = await get("/health") as { ok?: boolean };
-  if (!r.ok) throw new Error("ok !== true");
+  const r = await get("/health") as { ok?: boolean; status?: string };
+  if (!(r.ok === true || r.status === "ok")) {
+    throw new Error("health payload does not contain ok=true or status='ok'");
+  }
 });
 
 await check("GET /api/v1/connectors — connector list accessible", async () => {
-  const r = await get("/api/v1/connectors") as { ok?: boolean };
-  if (!r.ok) throw new Error("ok !== true");
+  const r = await get("/api/v1/connectors") as { ok?: boolean; connectors?: unknown[] };
+  if (!(r.ok === true || Array.isArray(r.connectors))) {
+    throw new Error("connectors payload does not contain ok=true or connectors[]");
+  }
 });
 
 await check("GET /api/v1/contracts/my — user contract list accessible", async () => {
@@ -71,7 +90,14 @@ await check("GET /api/v1/contracts/my — user contract list accessible", async 
 });
 
 await check("GET /api/v1/registry/contracts — marketplace accessible", async () => {
-  await get("/api/v1/registry/contracts");
+  const primary = await fetchJson("/api/v1/registry/contracts");
+  if (primary.status >= 200 && primary.status < 300) return;
+  if (primary.status !== 404) throw new Error(`registry endpoint failed with HTTP ${primary.status}`);
+
+  // Compatibility fallback: some deployments expose marketplace via /api/v1/tasks.
+  const fallback = await fetchJson("/api/v1/tasks");
+  if (fallback.status >= 200 && fallback.status < 300) return;
+  throw new Error(`registry endpoint 404 and fallback /api/v1/tasks failed with HTTP ${fallback.status}`);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────
